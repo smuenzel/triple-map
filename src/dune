@@ -1,0 +1,11 @@
+(library
+  (name triple_map)
+  (public_name triple_map)
+  (preprocess (pps ppx_sexp_conv ppx_match_compare))
+)
+
+(cinaps
+  (files triple.ml)
+  (libraries case_writer core)
+  (runtime_deps ../shallow_cases.sexp ../fusion_cases.sexp)
+  )

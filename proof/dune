@@ -1,0 +1,15 @@
+(rocq.theory
+  (name Balanced)
+  (theories Stdlib Equations Ltac2 stdpp))
+
+(cinaps
+  (files triple0.v)
+  (libraries case_writer core)
+  (runtime_deps ../shallow_cases.sexp ../fusion_cases.sexp)
+  )
+
+(env
+ (dev
+  (flags (:standard)))
+ (release
+  (ocamlopt_flags (:standard -O3))))
