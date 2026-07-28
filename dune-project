@@ -19,6 +19,6 @@
  (name triple_map)
  (synopsis "An efficient map implementation")
  (description "An efficient map implementation")
- (depends (ocaml (>= 5.1.0)) ppx_expect ppx_jane base ppxlib core ppx_sexp_conv ocaml-option-flambda)
+ (depends (ocaml (>= 5.5.0)) ppx_expect ppx_jane base ppxlib core ppx_sexp_conv ocaml-option-flambda)
  (tags
   (map)))

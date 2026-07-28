@@ -12,7 +12,7 @@ open Sexplib0.Sexp_conv
    [3] Blelloch, Guy E., et al. “Just Join for Parallel Ordered Sets.” Proceedings of the 28th ACM Symposium on Parallelism in Algorithms and Architectures, edited by , ACM, 2016, pp. 253–64. Spaa ’16. Crossref, https://doi.org/10.1145/2935764.2935768.
 
    [4] Y. HIRAI and K. YAMAMOTO, “Balancing weight-balanced trees,” Journal of Functional Programming, vol. 21, no. 3, pp. 287–307, 2011. doi:10.1017/S0956796811000104 
-   *)
+*)
 
 module Comparison = struct
   type t = Lt |Eq | Gt
@@ -1443,7 +1443,7 @@ let balance_shallow ~n1 ~k0 ~v0 ~n2 =
     val present_2 : ('a1, 'a2) acc -> ('a1, 'a2) user_param -> is_tail:bool -> k:K.t -> v:'a2 -> ('a1, 'a2) acc
   end
 
-  module Fold_low2(F : Fold2_folder) = struct
+  module [@inline hint] Fold_low2(F : Fold2_folder) = struct
     let fold =
       let rec
         consume_t1_initial : 'np0 'np1. (_, _, _, _, _, _, _, _, 'final, 'np0, 'np1) Iterator2.consume_f =
@@ -1535,6 +1535,209 @@ let balance_shallow ~n1 ~k0 ~v0 ~n2 =
           ~st6:acc
           ~final:final_consume_only_t2
   end
+
+  module FolderX_2(F : Fold2_folder) = struct
+    module Stack = Iterator_stack
+
+    let present1_tail acc user k v = F.present_1 acc user ~is_tail:true ~k ~v
+    let present2_tail acc user k v = F.present_2 acc user ~is_tail:true ~k ~v
+
+    type 'c state =
+      | Start : _ state
+      | Empty : c_empty state
+      | V2_1 : c_v2 state
+      | V3_1 : c_v3 state
+      | V3_12 : c_v3 state
+
+    let rec step :
+      'c1 'c2 'nk1 'nk2 'v1 'v2 .
+      acc:('v1, 'v2) F.acc -> user:('v1 , 'v2) F.user_param
+      -> stack1:'v1 Stack.t -> t1:('c1, 'nk1, 'v1) node -> state1:'c1 state 
+      -> stack2:'v2 Stack.t -> t2:('c2, 'nk2, 'v2) node -> state2:'c2 state -> ('v1, 'v2) F.acc =
+      fun
+        (type c1 c2 nk1 nk2 v1 v2)
+        ~(acc : (v1, v2) F.acc) ~user
+        ~stack1 ~(t1 : (c1, nk1, v1) node) ~(state1 : c1 state)
+        ~stack2 ~(t2 : (c2, nk2, v2) node) ~(state2 : c2 state) ->
+        match t1, state1, t2, state2 with
+        | Empty _, Empty, _, _ -> finish2 ~acc ~user ~stack2 ~t2 ~state2
+        | Empty _, Start, _, _ -> finish2 ~acc ~user ~stack2 ~t2 ~state2
+        | _, _, Empty _, Empty -> finish1 ~acc ~user ~stack1 ~t1 ~state1
+        | _, _, Empty _, Start -> finish1 ~acc ~user ~stack1 ~t1 ~state1
+        | V1 { k1 = k1; v1 = v1; }, _, V1 { k1 = k1'; v1 = v1'; }, _ ->
+          begin match%compare K.compare k1 k1' with
+            | Eq ->
+              let acc = F.both_present acc user ~k:k1 ~v1:v1 ~v2:v1' in
+              step_up12 ~acc ~user ~stack1 ~stack2
+            | Lt ->
+              assert false
+            | Gt ->
+              assert false
+          end
+        | _, _, _, _ -> assert false
+    and step_value_initial
+      : 'c1 'c2 'nk1 'nk2 'v1 'v2 .
+      acc:('v1, 'v2) F.acc -> user:('v1 , 'v2) F.user_param
+      -> stack1:'v1 Stack.t -> t1:('c1, 'nk1, 'v1) node -> state1:'c1 state -> k1:K.t -> v1:'v1
+      -> stack2:'v2 Stack.t -> t2:('c2, 'nk2, 'v2) node -> state2:'c2 state -> k2:K.t -> v2:'v2
+      -> ('v1, 'v2) F.acc =
+      fun
+        (type c1 c2 nk1 nk2 v1 v2)
+        ~(acc : (v1, v2) F.acc) ~user
+        ~stack1 ~(t1 : (c1, nk1, v1) node) ~(state1 : c1 state) ~k1 ~(v1 : v1)
+        ~stack2 ~(t2 : (c2, nk2, v2) node) ~(state2 : c2 state) ~k2 ~(v2 : v2) ->
+        match%compare K.compare k1 k2 with
+        | Eq ->
+          let acc = F.both_present acc user ~k:k1 ~v1 ~v2 in
+          step_next_12 ~acc ~user ~stack1 ~t1 ~state1 ~stack2 ~t2 ~state2
+        | Lt ->
+          let acc = F.present_1 acc user ~is_tail:false ~k:k1 ~v:v1 in
+          step_next_1 ~acc ~user ~stack1 ~t1 ~state1 ~stack2 ~t2 ~state2 ~k2 ~v2
+    and step_next_12
+      : 'c1 'c2 'nk1 'nk2 'v1 'v2 .
+      acc:('v1, 'v2) F.acc -> user:('v1 , 'v2) F.user_param
+      -> stack1:'v1 Stack.t -> t1:('c1, 'nk1, 'v1) node -> state1:'c1 state
+      -> stack2:'v2 Stack.t -> t2:('c2, 'nk2, 'v2) node -> state2:'c2 state
+      -> ('v1, 'v2) F.acc =
+      fun 
+        (type c1 c2 nk1 nk2 v1 v2)
+        ~(acc : (v1, v2) F.acc) ~user
+        ~stack1 ~(t1 : (c1, nk1, v1) node) ~(state1 : c1 state)
+        ~stack2 ~(t2 : (c2, nk2, v2) node) ~(state2 : c2 state) ->
+      acc
+    and step_next_1
+      : 'c1 'c2 'nk1 'nk2 'v1 'v2 .
+      acc:('v1, 'v2) F.acc -> user:('v1 , 'v2) F.user_param
+      -> stack1:'v1 Stack.t -> t1:('c1, 'nk1, 'v1) node -> state1:'c1 state
+      -> stack2:'v2 Stack.t -> t2:('c2, 'nk2, 'v2) node -> state2:'c2 state -> k2:K.t -> v2:'v2
+      -> ('v1, 'v2) F.acc =
+      fun
+        (type c1 c2 nk1 nk2 v1 v2)
+        ~(acc : (v1, v2) F.acc) ~user
+        ~stack1 ~(t1 : (c1, nk1, v1) node) ~(state1 : c1 state)
+        ~stack2 ~(t2 : (c2, nk2, v2) node) ~(state2 : c2 state) ~k2 ~(v2 : v2) ->
+        acc
+    and step_next_2
+      : 'c1 'c2 'nk1 'nk2 'v1 'v2 .
+      acc:('v1, 'v2) F.acc -> user:('v1 , 'v2) F.user_param
+      -> stack1:'v1 Stack.t -> t1:('c1, 'nk1, 'v1) node -> state1:'c1 state -> k1:K.t -> v1:'v1
+      -> stack2:'v2 Stack.t -> t2:('c2, 'nk2, 'v2) node -> state2:'c2 state
+      -> ('v1, 'v2) F.acc =
+      fun
+        (type c1 c2 nk1 nk2 v1 v2)
+        ~(acc : (v1, v2) F.acc) ~user
+        ~stack1 ~(t1 : (c1, nk1, v1) node) ~(state1 : c1 state) ~k1 ~(v1 : v1)
+        ~stack2 ~(t2 : (c2, nk2, v2) node) ~(state2 : c2 state) ->
+        acc
+    and finish2 :
+      'c2 'nk2 'v2 'v1.
+      acc:('v1, 'v2) F.acc -> user:('v1, 'v2) F.user_param
+      -> stack2:'v2 Stack.t -> t2:('c2, 'nk2, 'v2) node -> state2:'c2 state -> ('v1, 'v2) F.acc =
+      fun (type c2 nk2 v1 v2) ~(acc : (v1, v2) F.acc) ~(user : (v1, v2) F.user_param) ~(stack2 : v2 Stack.t) ~(t2 : (c2, nk2, v2) node) ~(state2 : c2 state) ->
+      acc
+    and finish1 :
+      'c1 'nk1 'v2 'v1 .
+      acc:('v1, 'v2) F.acc -> user:('v1 , 'v2) F.user_param
+      -> stack1:'v1 Stack.t -> t1:('c1, 'nk1, 'v1) node -> state1:'c1 state -> ('v1, 'v2) F.acc =
+      fun (type c1 nk1 v1 v2) ~acc ~user ~stack1 ~(t1 : (c1, nk1, v1) node) ~(state1 : c1 state) ->
+      acc
+    and step_up12 :
+      'v1 'v2 .
+        acc:('v1, 'v2) F.acc -> user:('v1 , 'v2) F.user_param
+      -> stack1:'v1 Stack.t -> stack2:'v2 Stack.t -> ('v1, 'v2) F.acc =
+      fun ~acc ~user ~stack1 ~stack2 ->
+      acc
+
+    (*{[
+    let rec step ~acc ~user ~stack1 ~t1 ~state1 ~stack2 ~t2 ~state2 =
+      let T t1, T t2 = t1, t2 in
+      match t1, state1, t2, state2 with
+      | Node { weight = _; n1; k0; v0; n2 } as n0, _, _, _ ->
+        let stack1 = n0 :: stack1 in
+        step ~acc ~user ~stack1 ~t1:n1 ~stack2 ~t2
+      | _, _, Node { weight = _; n1; k0; v0; n2 } as n0, _ ->
+        let stack2 = n0 :: stack2 in
+        step ~acc ~user ~stack1 ~t1 ~stack2 ~t2:n1
+      | V1 { k1 = k1; v1 = v1; }, _, V1 { k1 = k1'; v1 = v1'; }, _ ->
+        begin match%compare K.compare k1 k1' with
+          | Eq ->
+            let acc = F.both_present acc user ~k:k1 ~v1:v1 ~v2:v1' in
+            ()
+          | Lt ->
+            let acc = F.present_1 acc user ~is_tail:false ~k:k1 ~v:v1 in
+            step_up1 ~acc ~user ~stack1 ~stack2 ~t2
+          | Gt ->
+            let acc = F.present_2 acc user ~is_tail:false ~k:k1' ~v:v1' in
+            step_up2 ~acc ~user ~stack1 ~t1 ~stack2
+        end
+    and step_up12 ~acc ~user ~stack1 ~stack2  =
+      match stack1, stack2 with
+      | [], [] -> acc
+      | [], Node { weight = _; n1 = _; k0; v0; n2 } :: stack2 ->
+        let acc = F.present_2 acc user ~is_tail:true ~k:k0 ~v:v0 in
+        finish2 ~acc ~user ~stack2 ~t2:n2
+      | Node { weight = _; n1 = _; k0; v0; n2 } :: stack1, [] ->
+        let acc = F.present_1 acc user ~is_tail:true ~k:k0 ~v:v0 in
+        finish1 ~acc ~user ~stack1 ~t1:n2
+      | Node { weight = _; n1 = _; k0; v0; n2 } :: stack1' , Node { weight = _; n1 = _; k0'; v0'; n2' } :: stack2' ->
+        match%compare K.compare k0 k0' with
+        | Eq ->
+          let acc = F.both_present acc user ~k:k0 ~v1:v0 ~v2:v0' in
+          step ~acc ~user ~stack1:stack1' ~t1:n2 ~state1:Start ~stack2:stack2' ~t2:n2' ~state2:Start
+        | Lt ->
+          let acc = F.present_1 acc user ~is_tail:false ~k:k0 ~v:v0 in
+          step ~acc ~user ~stack1:stack1' ~t1:n2 ~state1:Start ~stack2 ~t2
+        | Gt ->
+          let acc = F.present_2 acc user ~is_tail:false ~k:k0' ~v:v0' in
+          step ~acc ~user ~stack1 ~t1 ~state1:Start ~stack2:stack2' ~t2:n2' ~state2:Start
+    and step_up1 ~acc ~user ~stack1 ~stack2 ~t2 ~state2 =
+      match stack1 with
+      | [] -> finish2 ~acc ~user ~stack2 ~t2 ~state2
+      | Node { weight = _; n1 = _; k0; v0; n2 } :: stack1 ->
+        let acc = F.present_1 acc user ~is_tail:false ~k:k0 ~v:v0 in
+        step ~acc ~user ~stack1 ~t1:n2 ~stack2 ~t2
+    and step_up2 ~acc ~user ~stack1 ~t1 ~stack2 =
+      match stack2 with
+      | [] -> finish1 ~acc ~user ~stack1 ~t1
+      | Node { weight = _; n1 = _; k0; v0; n2 } :: stack2 ->
+        let acc = F.present_2 acc user ~is_tail:false ~k:k0 ~v:v0 in
+        step ~acc ~user ~stack1 ~t1 ~stack2 ~t2:n2
+    and finish2 ~acc ~user ~stack2 ~t2 =
+      ()
+    and finish1 ~acc ~user ~stack1 ~t1 =
+      ()
+
+
+
+
+
+    let rec step_down (stack : 'v Stack.t) (T t) ~state0 ~state1 ~state2 ~state3 =
+      match t with
+      | Node { weight = _; n1; k0; v0; n2 } as n0 ->
+        let stack = n0 :: stack in
+        step_down stack n1 ~state0 ~state1 ~state2 ~state3
+      | V1 { k1; v1; } ->
+        C.consume ~k:k1 ~v:v1 ~next:step_up stack () ~state0 ~state1 ~state2 ~state3
+      | V2 { k11; v11; k1; v1; } as n ->
+        C.consume ~k:k11 ~v:v11 ~next:step_v2_1 stack n ~state0 ~state1 ~state2 ~state3
+      | V3 { k11; v11; k1; v1; k12; v12; } as n ->
+        C.consume ~k:k11 ~v:v11 ~next:step_v3_1 stack n ~state0 ~state1 ~state2 ~state3
+      | Empty _ ->
+        step_up stack () ~state0 ~state1 ~state2 ~state3
+    and step_up (stack : 'v Stack.t) () ~state0 ~state1 ~state2 ~state3 =
+      match stack with
+      | [] -> C.final ~state0 ~state1 ~state2 ~state3
+      | Node { weight = _; n1 = _; k0; v0; n2 } :: stack ->
+        C.consume ~k:k0 ~v:v0 ~next:step_down stack n2 ~state0 ~state1 ~state2 ~state3
+    and step_v2_1 (stack : 'v Stack.t) (V2 { k11; v11; k1; v1; }) ~state0 ~state1 ~state2 ~state3 =
+      C.consume ~k:k1 ~v:v1 ~next:step_up stack () ~state0 ~state1 ~state2 ~state3
+    and step_v3_1 (stack : 'v Stack.t) (V3 { k11; v11; k1; v1; k12; v12; } as n) ~state0 ~state1 ~state2 ~state3 =
+      C.consume ~k:k1 ~v:v1 ~next:step_v3_12 stack n ~state0 ~state1 ~state2 ~state3
+    and step_v3_12 (stack : 'v Stack.t) (V3 { k11; v11; k1; v1; k12; v12; }) ~state0 ~state1 ~state2 ~state3 =
+      C.consume ~k:k12 ~v:v12 ~next:step_up stack () ~state0 ~state1 ~state2 ~state3
+       ]} *)
+  end
+
 end
 
 module type S_stdlib = sig

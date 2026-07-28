@@ -10,7 +10,7 @@ homepage: "https://github.com/smuenzel/triple-map"
 bug-reports: "https://github.com/smuenzel/triple-map/issues"
 depends: [
   "dune" {>= "3.22"}
-  "ocaml" {>= "5.1.0"}
+  "ocaml" {>= "5.5.0"}
   "ppx_expect"
   "ppx_jane"
   "base"
