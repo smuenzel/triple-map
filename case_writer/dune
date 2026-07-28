@@ -2,5 +2,5 @@
   (name case_writer)
   (libraries core)
   (preprocess (pps ppx_expect ppx_jane))
-  (inline_tests)
+  (inline_tests (deps case_writer.ml))
   )
