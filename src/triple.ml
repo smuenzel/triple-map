@@ -1548,6 +1548,7 @@ let balance_shallow ~n1 ~k0 ~v0 ~n2 =
       | V2_1 : c_v2 state
       | V3_1 : c_v3 state
       | V3_12 : c_v3 state
+      | Node_v : c_node state
 
     let rec step :
       'c1 'c2 'nk1 'nk2 'v1 'v2 .
@@ -1564,18 +1565,36 @@ let balance_shallow ~n1 ~k0 ~v0 ~n2 =
         | Empty _, Start, _, _ -> finish2 ~acc ~user ~stack2 ~t2 ~state2
         | _, _, Empty _, Empty -> finish1 ~acc ~user ~stack1 ~t1 ~state1
         | _, _, Empty _, Start -> finish1 ~acc ~user ~stack1 ~t1 ~state1
-        | V1 { k1 = k1; v1 = v1; }, _, V1 { k1 = k1'; v1 = v1'; }, _ ->
-          begin match%compare K.compare k1 k1' with
-            | Eq ->
-              let acc = F.both_present acc user ~k:k1 ~v1:v1 ~v2:v1' in
-              step_up12 ~acc ~user ~stack1 ~stack2
-            | Lt ->
-              assert false
-            | Gt ->
-              assert false
-          end
+        | V1 { k1 = k1; v1 = v1; }, _, V1 { k1 = k2; v1 = v2; }, _ ->
+          step_value ~acc ~user ~stack1 ~t1 ~state1 ~k1 ~v1 ~stack2 ~t2 ~state2 ~k2 ~v2
+        | V1 { k1 = k1; v1 = v1; }, _, V2 { k11 = k2; v11 = v2; }, Start ->
+          step_value ~acc ~user ~stack1 ~t1 ~state1 ~k1 ~v1 ~stack2 ~t2 ~state2 ~k2 ~v2
+        | V1 { k1 = k1; v1 = v1; }, _, V3 { k11 = k2; v11 = v2; }, Start ->
+          step_value ~acc ~user ~stack1 ~t1 ~state1 ~k1 ~v1 ~stack2 ~t2 ~state2 ~k2 ~v2
+        | V1 { k1 = k1; v1 = v1; }, _, Node { n1 = T n1; _}, Start ->
+          step ~acc ~user ~stack1 ~t1 ~state1 ~stack2:(t2 :: stack2) ~t2:n1 ~state2:Start
+        | V2 { k11 = k1; v11 = v1; }, Start, V1 { k1 = k2; v1 = v2; }, _ ->
+          step_value ~acc ~user ~stack1 ~t1 ~state1 ~k1 ~v1 ~stack2 ~t2 ~state2 ~k2 ~v2
+        | V2 { k11 = k1; v11 = v1; }, Start, V2 { k11 = k2; v11 = v2; }, Start ->
+          step_value ~acc ~user ~stack1 ~t1 ~state1 ~k1 ~v1 ~stack2 ~t2 ~state2 ~k2 ~v2
+        | V2 { k11 = k1; v11 = v1; }, Start, V3 { k11 = k2; v11 = v2; }, Start ->
+          step_value ~acc ~user ~stack1 ~t1 ~state1 ~k1 ~v1 ~stack2 ~t2 ~state2 ~k2 ~v2
+        | V3 { k11 = k1; v11 = v1; }, Start, V1 { k1 = k2; v1 = v2; }, _ ->
+          step_value ~acc ~user ~stack1 ~t1 ~state1 ~k1 ~v1 ~stack2 ~t2 ~state2 ~k2 ~v2
+        | Node { n1 = T n1; _}, Start, V1 { k1 = k2; v1 = v2; }, _ ->
+          step ~acc ~user ~stack1:(t1 :: stack1) ~t1:n1 ~state1:Start ~stack2 ~t2 ~state2
+        | V1 { k1 = k1; v1 = v1; }, _, V2 { k1 = k2; v1 = v2; }, V2_1 ->
+          step_value ~acc ~user ~stack1 ~t1 ~state1 ~k1 ~v1 ~stack2 ~t2 ~state2 ~k2 ~v2
+        | V1 { k1 = k1; v1 = v1; }, _, V3 { k1 = k2; v1 = v2; }, V3_1 ->
+          step_value ~acc ~user ~stack1 ~t1 ~state1 ~k1 ~v1 ~stack2 ~t2 ~state2 ~k2 ~v2
+        | V1 { k1 = k1; v1 = v1; }, _, V3 { k12 = k2; v12 = v2; }, V3_12 ->
+          step_value ~acc ~user ~stack1 ~t1 ~state1 ~k1 ~v1 ~stack2 ~t2 ~state2 ~k2 ~v2
+        | V1 { k1 = k1; v1 = v1; }, _, Node { k0 = k2; v0 = v2; _}, Node_v ->
+          step_value ~acc ~user ~stack1 ~t1 ~state1 ~k1 ~v1 ~stack2 ~t2 ~state2 ~k2 ~v2
+            (*
         | _, _, _, _ -> assert false
-    and step_value_initial
+               *)
+    and step_value
       : 'c1 'c2 'nk1 'nk2 'v1 'v2 .
       acc:('v1, 'v2) F.acc -> user:('v1 , 'v2) F.user_param
       -> stack1:'v1 Stack.t -> t1:('c1, 'nk1, 'v1) node -> state1:'c1 state -> k1:K.t -> v1:'v1
