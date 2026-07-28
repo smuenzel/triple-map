@@ -1536,7 +1536,15 @@ let balance_shallow ~n1 ~k0 ~v0 ~n2 =
           ~final:final_consume_only_t2
   end
 
-  module FolderX_2(F : Fold2_folder) = struct
+  module FolderX_2(F : Fold2_folder) : sig
+    val fold
+      :  acc : ('v1, 'v2) F.acc
+      -> user:('v1, 'v2) F.user_param
+      -> 'v1 t
+      -> 'v2 t
+      -> ('v1, 'v2) F.acc
+
+  end = struct
     module Stack = Iterator_stack
 
     let present1_tail acc user k v = F.present_1 acc user ~is_tail:true ~k ~v
@@ -2062,94 +2070,9 @@ let balance_shallow ~n1 ~k0 ~v0 ~n2 =
       | [] -> acc
       | t1 :: stack1 -> finish1 ~acc ~user ~stack1 ~t1 ~state1:Start
 
-    (*{[
-    let rec step ~acc ~user ~stack1 ~t1 ~state1 ~stack2 ~t2 ~state2 =
-      let T t1, T t2 = t1, t2 in
-      match t1, state1, t2, state2 with
-      | Node { weight = _; n1; k0; v0; n2 } as n0, _, _, _ ->
-        let stack1 = n0 :: stack1 in
-        step ~acc ~user ~stack1 ~t1:n1 ~stack2 ~t2
-      | _, _, Node { weight = _; n1; k0; v0; n2 } as n0, _ ->
-        let stack2 = n0 :: stack2 in
-        step ~acc ~user ~stack1 ~t1 ~stack2 ~t2:n1
-      | V1 { k1 = k1; v1 = v1; }, _, V1 { k1 = k1'; v1 = v1'; }, _ ->
-        begin match%compare K.compare k1 k1' with
-          | Eq ->
-            let acc = F.both_present acc user ~k:k1 ~v1:v1 ~v2:v1' in
-            ()
-          | Lt ->
-            let acc = F.present_1 acc user ~is_tail:false ~k:k1 ~v:v1 in
-            step_up1 ~acc ~user ~stack1 ~stack2 ~t2
-          | Gt ->
-            let acc = F.present_2 acc user ~is_tail:false ~k:k1' ~v:v1' in
-            step_up2 ~acc ~user ~stack1 ~t1 ~stack2
-        end
-    and step_up12 ~acc ~user ~stack1 ~stack2  =
-      match stack1, stack2 with
-      | [], [] -> acc
-      | [], Node { weight = _; n1 = _; k0; v0; n2 } :: stack2 ->
-        let acc = F.present_2 acc user ~is_tail:true ~k:k0 ~v:v0 in
-        finish2 ~acc ~user ~stack2 ~t2:n2
-      | Node { weight = _; n1 = _; k0; v0; n2 } :: stack1, [] ->
-        let acc = F.present_1 acc user ~is_tail:true ~k:k0 ~v:v0 in
-        finish1 ~acc ~user ~stack1 ~t1:n2
-      | Node { weight = _; n1 = _; k0; v0; n2 } :: stack1' , Node { weight = _; n1 = _; k0'; v0'; n2' } :: stack2' ->
-        match%compare K.compare k0 k0' with
-        | Eq ->
-          let acc = F.both_present acc user ~k:k0 ~v1:v0 ~v2:v0' in
-          step ~acc ~user ~stack1:stack1' ~t1:n2 ~state1:Start ~stack2:stack2' ~t2:n2' ~state2:Start
-        | Lt ->
-          let acc = F.present_1 acc user ~is_tail:false ~k:k0 ~v:v0 in
-          step ~acc ~user ~stack1:stack1' ~t1:n2 ~state1:Start ~stack2 ~t2
-        | Gt ->
-          let acc = F.present_2 acc user ~is_tail:false ~k:k0' ~v:v0' in
-          step ~acc ~user ~stack1 ~t1 ~state1:Start ~stack2:stack2' ~t2:n2' ~state2:Start
-    and step_up1 ~acc ~user ~stack1 ~stack2 ~t2 ~state2 =
-      match stack1 with
-      | [] -> finish2 ~acc ~user ~stack2 ~t2 ~state2
-      | Node { weight = _; n1 = _; k0; v0; n2 } :: stack1 ->
-        let acc = F.present_1 acc user ~is_tail:false ~k:k0 ~v:v0 in
-        step ~acc ~user ~stack1 ~t1:n2 ~stack2 ~t2
-    and step_up2 ~acc ~user ~stack1 ~t1 ~stack2 =
-      match stack2 with
-      | [] -> finish1 ~acc ~user ~stack1 ~t1
-      | Node { weight = _; n1 = _; k0; v0; n2 } :: stack2 ->
-        let acc = F.present_2 acc user ~is_tail:false ~k:k0 ~v:v0 in
-        step ~acc ~user ~stack1 ~t1 ~stack2 ~t2:n2
-    and finish2 ~acc ~user ~stack2 ~t2 =
-      ()
-    and finish1 ~acc ~user ~stack1 ~t1 =
-      ()
+    let fold ~acc ~user (T t1) (T t2) =
+      step ~acc ~user ~stack1:Stack.empty ~t1 ~state1:Start ~stack2:Stack.empty ~t2 ~state2:Start
 
-
-
-
-
-    let rec step_down (stack : 'v Stack.t) (T t) ~state0 ~state1 ~state2 ~state3 =
-      match t with
-      | Node { weight = _; n1; k0; v0; n2 } as n0 ->
-        let stack = n0 :: stack in
-        step_down stack n1 ~state0 ~state1 ~state2 ~state3
-      | V1 { k1; v1; } ->
-        C.consume ~k:k1 ~v:v1 ~next:step_up stack () ~state0 ~state1 ~state2 ~state3
-      | V2 { k11; v11; k1; v1; } as n ->
-        C.consume ~k:k11 ~v:v11 ~next:step_v2_1 stack n ~state0 ~state1 ~state2 ~state3
-      | V3 { k11; v11; k1; v1; k12; v12; } as n ->
-        C.consume ~k:k11 ~v:v11 ~next:step_v3_1 stack n ~state0 ~state1 ~state2 ~state3
-      | Empty _ ->
-        step_up stack () ~state0 ~state1 ~state2 ~state3
-    and step_up (stack : 'v Stack.t) () ~state0 ~state1 ~state2 ~state3 =
-      match stack with
-      | [] -> C.final ~state0 ~state1 ~state2 ~state3
-      | Node { weight = _; n1 = _; k0; v0; n2 } :: stack ->
-        C.consume ~k:k0 ~v:v0 ~next:step_down stack n2 ~state0 ~state1 ~state2 ~state3
-    and step_v2_1 (stack : 'v Stack.t) (V2 { k11; v11; k1; v1; }) ~state0 ~state1 ~state2 ~state3 =
-      C.consume ~k:k1 ~v:v1 ~next:step_up stack () ~state0 ~state1 ~state2 ~state3
-    and step_v3_1 (stack : 'v Stack.t) (V3 { k11; v11; k1; v1; k12; v12; } as n) ~state0 ~state1 ~state2 ~state3 =
-      C.consume ~k:k1 ~v:v1 ~next:step_v3_12 stack n ~state0 ~state1 ~state2 ~state3
-    and step_v3_12 (stack : 'v Stack.t) (V3 { k11; v11; k1; v1; k12; v12; }) ~state0 ~state1 ~state2 ~state3 =
-      C.consume ~k:k12 ~v:v12 ~next:step_up stack () ~state0 ~state1 ~state2 ~state3
-       ]} *)
   end
 
 end
