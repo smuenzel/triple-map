@@ -1760,21 +1760,6 @@ let balance_shallow ~n1 ~k0 ~v0 ~n2 =
           step ~acc ~user ~stack1 ~t1 ~state1:V2_1 ~stack2 ~t2 ~state2
         | Node { n2 = T t1; _}, Node_v ->
           step ~acc ~user ~stack1 ~t1 ~state1:Start ~stack2 ~t2 ~state2
-    and step_up1
-      : 'c1 'c2 'nk1 'nk2 'v1 'v2 .
-          acc:('v1, 'v2) F.acc -> user:('v1 , 'v2) F.user_param
-        -> stack1:'v1 Stack.t
-        -> stack2:'v2 Stack.t -> t2:('c2, 'nk2, 'v2) node -> state2:'c2 state
-        -> ('v1, 'v2) F.acc =
-      fun
-        (type c1 c2 nk1 nk2 v1 v2)
-        ~(acc : (v1, v2) F.acc) ~user
-        ~stack1
-        ~stack2 ~(t2 : (c2, nk2, v2) node) ~(state2 : c2 state) ->
-        match stack1 with
-        | [] -> finish2 ~acc ~user ~stack2 ~t2 ~state2
-        | t1 :: stack1 ->
-          step ~acc ~user ~stack1 ~t1 ~state1:Node_v ~stack2 ~t2 ~state2
     and step_next_2
       : 'c1 'c2 'nk1 'nk2 'v1 'v2 .
       acc:('v1, 'v2) F.acc -> user:('v1 , 'v2) F.user_param
@@ -1800,6 +1785,21 @@ let balance_shallow ~n1 ~k0 ~v0 ~n2 =
           step ~acc ~user ~stack2 ~t2 ~state2:V2_1 ~stack1 ~t1 ~state1
         | Node { n2 = T t2; _}, Node_v ->
           step ~acc ~user ~stack2 ~t2 ~state2:Start ~stack1 ~t1 ~state1
+    and step_up1
+      : 'c1 'c2 'nk1 'nk2 'v1 'v2 .
+          acc:('v1, 'v2) F.acc -> user:('v1 , 'v2) F.user_param
+        -> stack1:'v1 Stack.t
+        -> stack2:'v2 Stack.t -> t2:('c2, 'nk2, 'v2) node -> state2:'c2 state
+        -> ('v1, 'v2) F.acc =
+      fun
+        (type c1 c2 nk1 nk2 v1 v2)
+        ~(acc : (v1, v2) F.acc) ~user
+        ~stack1
+        ~stack2 ~(t2 : (c2, nk2, v2) node) ~(state2 : c2 state) ->
+        match stack1 with
+        | [] -> finish2 ~acc ~user ~stack2 ~t2 ~state2
+        | t1 :: stack1 ->
+          step ~acc ~user ~stack1 ~t1 ~state1:Node_v ~stack2 ~t2 ~state2
     and step_up2
       : 'c1 'c2 'nk1 'nk2 'v1 'v2 .
           acc:('v1, 'v2) F.acc -> user:('v1 , 'v2) F.user_param
@@ -1815,6 +1815,17 @@ let balance_shallow ~n1 ~k0 ~v0 ~n2 =
         | [] -> finish1 ~acc ~user ~stack1 ~t1 ~state1
         | t2 :: stack2 ->
           step ~acc ~user ~stack2 ~t2 ~state2:Node_v ~stack1 ~t1 ~state1
+    and step_up12 :
+      'v1 'v2 .
+        acc:('v1, 'v2) F.acc -> user:('v1 , 'v2) F.user_param
+      -> stack1:'v1 Stack.t -> stack2:'v2 Stack.t -> ('v1, 'v2) F.acc =
+      fun ~acc ~user ~stack1 ~stack2 ->
+      match stack1, stack2 with
+      | [], [] -> acc
+      | [], t2 :: stack2 -> finish2 ~acc ~user ~stack2 ~t2 ~state2:Node_v
+      | t1 :: stack1, [] -> finish1 ~acc ~user ~stack1 ~t1 ~state1:Node_v
+      | t1 :: stack1, t2 :: stack2 ->
+        step ~acc ~user ~stack1 ~t1 ~state1:Node_v ~stack2 ~t2 ~state2:Node_v
     and finish2 :
       'c2 'nk2 'v2 'v1.
       acc:('v1, 'v2) F.acc -> user:('v1, 'v2) F.user_param
@@ -1826,12 +1837,6 @@ let balance_shallow ~n1 ~k0 ~v0 ~n2 =
       acc:('v1, 'v2) F.acc -> user:('v1 , 'v2) F.user_param
       -> stack1:'v1 Stack.t -> t1:('c1, 'nk1, 'v1) node -> state1:'c1 state -> ('v1, 'v2) F.acc =
       fun (type c1 nk1 v1 v2) ~acc ~user ~stack1 ~(t1 : (c1, nk1, v1) node) ~(state1 : c1 state) ->
-      acc
-    and step_up12 :
-      'v1 'v2 .
-        acc:('v1, 'v2) F.acc -> user:('v1 , 'v2) F.user_param
-      -> stack1:'v1 Stack.t -> stack2:'v2 Stack.t -> ('v1, 'v2) F.acc =
-      fun ~acc ~user ~stack1 ~stack2 ->
       acc
 
     (*{[
