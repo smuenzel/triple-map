@@ -2000,13 +2000,67 @@ let balance_shallow ~n1 ~k0 ~v0 ~n2 =
       acc:('v1, 'v2) F.acc -> user:('v1, 'v2) F.user_param
       -> stack2:'v2 Stack.t -> t2:('c2, 'nk2, 'v2) node -> state2:'c2 state -> ('v1, 'v2) F.acc =
       fun (type c2 nk2 v1 v2) ~(acc : (v1, v2) F.acc) ~(user : (v1, v2) F.user_param) ~(stack2 : v2 Stack.t) ~(t2 : (c2, nk2, v2) node) ~(state2 : c2 state) ->
-      acc
+      let acc =
+        match t2, state2 with
+        | Empty _, _ -> acc
+        | Node { n1 = T n1; _}, Start ->
+          finish2 ~acc ~user ~stack2:(t2 :: stack2) ~t2:n1 ~state2:Start
+        | Node { k0; v0; n2 = T n2; _}, Node_v ->
+          let acc = F.present_2 acc user ~is_tail:true ~k:k0 ~v:v0 in
+          finish2 ~acc ~user ~stack2 ~t2:n2 ~state2:Start
+        | V1 { k1; v1 }, _ ->
+          F.present_2 acc user ~is_tail:true ~k:k1 ~v:v1
+        | V2 { k11; v11; k1; v1; }, Start ->
+          let acc = F.present_2 acc user ~is_tail:true ~k:k11 ~v:v11 in
+          F.present_2 acc user ~is_tail:true ~k:k1 ~v:v1
+        | V2 { k1; v1; _}, V2_1 ->
+          F.present_2 acc user ~is_tail:true ~k:k1 ~v:v1
+        | V3 { k11; v11; k1; v1; k12; v12; }, Start ->
+          let acc = F.present_2 acc user ~is_tail:true ~k:k11 ~v:v11 in
+          let acc = F.present_2 acc user ~is_tail:true ~k:k1 ~v:v1 in
+          F.present_2 acc user ~is_tail:true ~k:k12 ~v:v12
+        | V3 { k1; v1; k12; v12; _}, V3_1 ->
+          let acc = F.present_2 acc user ~is_tail:true ~k:k1 ~v:v1 in
+          F.present_2 acc user ~is_tail:true ~k:k12 ~v:v12
+        | V3 { k12; v12; _}, V3_12 ->
+          F.present_2 acc user ~is_tail:true ~k:k12 ~v:v12
+      in
+      match stack2 with
+      | [] -> acc
+      | t2 :: stack2 -> finish2 ~acc ~user ~stack2 ~t2 ~state2:Start
     and finish1 :
       'c1 'nk1 'v2 'v1 .
       acc:('v1, 'v2) F.acc -> user:('v1 , 'v2) F.user_param
       -> stack1:'v1 Stack.t -> t1:('c1, 'nk1, 'v1) node -> state1:'c1 state -> ('v1, 'v2) F.acc =
-      fun (type c1 nk1 v1 v2) ~acc ~user ~stack1 ~(t1 : (c1, nk1, v1) node) ~(state1 : c1 state) ->
-      acc
+      fun (type c1 nk1 v1 v2) ~acc ~user ~(stack1 : v1 Stack.t) ~(t1 : (c1, nk1, v1) node) ~(state1 : c1 state) ->
+      let acc =
+        match t1, state1 with
+        | Empty _, _ -> acc
+        | Node { n1 = T n1; _}, Start ->
+          finish1 ~acc ~user ~stack1:(t1 :: stack1) ~t1:n1 ~state1:Start
+        | Node { k0; v0; n2 = T n2; _}, Node_v ->
+          let acc = F.present_1 acc user ~is_tail:true ~k:k0 ~v:v0 in
+          finish1 ~acc ~user ~stack1 ~t1:n2 ~state1:Start
+        | V1 { k1; v1 }, _ ->
+          F.present_1 acc user ~is_tail:true ~k:k1 ~v:v1
+        | V2 { k11; v11; k1; v1; }, Start ->
+          let acc = F.present_1 acc user ~is_tail:true ~k:k11 ~v:v11 in
+          F.present_1 acc user ~is_tail:true ~k:k1 ~v:v1
+        | V2 { k1; v1; _}, V2_1 ->
+          F.present_1 acc user ~is_tail:true ~k:k1 ~v:v1
+        | V3 { k11; v11; k1; v1; k12; v12; }, Start ->
+          let acc = F.present_1 acc user ~is_tail:true ~k:k11 ~v:v11 in
+          let acc = F.present_1 acc user ~is_tail:true ~k:k1 ~v:v1 in
+          F.present_1 acc user ~is_tail:true ~k:k12 ~v:v12
+        | V3 { k1; v1; k12; v12; _}, V3_1 ->
+          let acc = F.present_1 acc user ~is_tail:true ~k:k1 ~v:v1 in
+          F.present_1 acc user ~is_tail:true ~k:k12 ~v:v12
+        | V3 { k12; v12; _}, V3_12 ->
+          F.present_1 acc user ~is_tail:true ~k:k12 ~v:v12
+      in
+      match stack1 with
+      | [] -> acc
+      | t1 :: stack1 -> finish1 ~acc ~user ~stack1 ~t1 ~state1:Start
 
     (*{[
     let rec step ~acc ~user ~stack1 ~t1 ~state1 ~stack2 ~t2 ~state2 =
