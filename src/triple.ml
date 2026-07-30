@@ -1536,7 +1536,7 @@ let balance_shallow ~n1 ~k0 ~v0 ~n2 =
           ~final:final_consume_only_t2
   end
 
-  module FolderX_2(F : Fold2_folder) : sig
+  module [@inline always] FolderX_2(F : Fold2_folder) : sig
     val fold
       :  acc : ('v1, 'v2) F.acc
       -> user:('v1, 'v2) F.user_param
@@ -1547,9 +1547,6 @@ let balance_shallow ~n1 ~k0 ~v0 ~n2 =
   end = struct
     module Stack = Iterator_stack
 
-    let present1_tail acc user k v = F.present_1 acc user ~is_tail:true ~k ~v
-    let present2_tail acc user k v = F.present_2 acc user ~is_tail:true ~k ~v
-
     type 'c state =
       | Start : _ state
       | Empty : c_empty state
@@ -1558,30 +1555,9 @@ let balance_shallow ~n1 ~k0 ~v0 ~n2 =
       | V3_12 : c_v3 state
       | Node_v : c_node state
 
-    let rec step :
-      'c1 'c2 'nk1 'nk2 'v1 'v2 .
-      acc:('v1, 'v2) F.acc -> user:('v1 , 'v2) F.user_param
-      -> stack1:'v1 Stack.t -> t1:('c1, 'nk1, 'v1) node -> state1:'c1 state 
-      -> stack2:'v2 Stack.t -> t2:('c2, 'nk2, 'v2) node -> state2:'c2 state -> ('v1, 'v2) F.acc =
-      fun
-        (type c1 c2 nk1 nk2 v1 v2)
-        ~(acc : (v1, v2) F.acc) ~user
-        ~stack1 ~(t1 : (c1, nk1, v1) node) ~(state1 : c1 state)
-        ~stack2 ~(t2 : (c2, nk2, v2) node) ~(state2 : c2 state) ->
-        match t1, state1, t2, state2 with
-        | Empty _, Empty, _, _ -> finish2 ~acc ~user ~stack2 ~t2 ~state2
-        | Empty _, Start, _, _ -> finish2 ~acc ~user ~stack2 ~t2 ~state2
-        | _, _, Empty _, Empty -> finish1 ~acc ~user ~stack1 ~t1 ~state1
-        | _, _, Empty _, Start -> finish1 ~acc ~user ~stack1 ~t1 ~state1
-        | Node { n1 = T n1; _}, Start, _, _ ->
-          step ~acc ~user ~stack1:(t1 :: stack1) ~t1:n1 ~state1:Start ~stack2 ~t2 ~state2
-        | _, _, Node { n1 = T n2; _}, Start ->
-          step ~acc ~user ~stack1 ~t1 ~state1 ~stack2:(t2 :: stack2) ~t2:n2 ~state2:Start
 (*$ 
   let case_list = [ `V1; `V2; `V2_1; `V3; `V3_1; `V3_12; `Node_v ]
   let all_cases = List.cartesian_product case_list case_list
-  let () =
-    Printf.printf "\n"
 
   let print_case_match ~suffix = function
     | `V1 ->
@@ -1599,117 +1575,95 @@ let balance_shallow ~n1 ~k0 ~v0 ~n2 =
     | `Node_v ->
       Printf.printf "Node { k0 = k%i; v0 = v%i; _ }, Node_v" suffix suffix
 
-  let () =
-    List.iter all_cases
-      ~f:(fun (case1, case2) ->
-          Printf.printf "        | ";
-          print_case_match ~suffix:1 case1;
-          Printf.printf ", ";
-          print_case_match ~suffix:2 case2;
-          Printf.printf "->\n";
-          Printf.printf "          step_value ~acc ~user ~stack1 ~t1 ~state1 ~k1 ~v1 ~stack2 ~t2 ~state2 ~k2 ~v2\n";
-          ()
-        )
-  *)
-        | V1 { k1 = k1; v1 = v1; }, _, V1 { k1 = k2; v1 = v2; }, _->
+  *)(*$*)
+
+    let rec step1 :
+      'c1 'c2 'nk1 'nk2 'v1 'v2 .
+      acc:('v1, 'v2) F.acc -> user:('v1 , 'v2) F.user_param
+      -> stack1:'v1 Stack.t -> t1:('c1, 'nk1, 'v1) node -> state1:'c1 state 
+      -> stack2:'v2 Stack.t -> t2:('c2, 'nk2, 'v2) node -> state2:'c2 state -> ('v1, 'v2) F.acc =
+      fun
+        (type c1 c2 nk1 nk2 v1 v2)
+        ~(acc : (v1, v2) F.acc) ~user
+        ~stack1 ~(t1 : (c1, nk1, v1) node) ~(state1 : c1 state)
+        ~stack2 ~(t2 : (c2, nk2, v2) node) ~(state2 : c2 state) ->
+        match state1 with
+        | Empty -> finish2 ~acc ~user ~stack2 ~t2 ~state2
+        | Start ->
+          begin match t1 with
+            | Empty _ -> finish2 ~acc ~user ~stack2 ~t2 ~state2
+            | Node { n1 = T t1; _} as s0 ->
+              step1 ~acc ~user ~stack1:(s0::stack1) ~t1 ~state1:Start ~stack2 ~t2 ~state2
+            | V1 { k1; v1 }
+            | V2 { k11 = k1; v11 = v1; _ }
+            | V3 { k11 = k1; v11 = v1; _ } ->
+              step2_value1 ~acc ~user ~stack2 ~t2 ~state2 ~k1 ~v1 ~state1 ~stack1 ~t1
+          end
+        | V2_1 ->
+          let k1, v1 = match t1 with
+            | V2 { k1; v1; _ } -> k1, v1
+          in
+          step2_value1 ~acc ~user ~stack2 ~t2 ~state2 ~k1 ~v1 ~state1:V2_1 ~stack1 ~t1
+        | V3_1 ->
+          let k1, v1 = match t1 with
+            | V3 { k1; v1; _ } -> k1, v1
+          in
+          step2_value1 ~acc ~user ~stack2 ~t2 ~state2 ~k1 ~v1 ~state1:V3_1 ~stack1 ~t1
+        | V3_12 ->
+          let k1, v1 = match t1 with
+            | V3 { k12; v12; _ } -> k12, v12
+          in
+          step2_value1 ~acc ~user ~stack2 ~t2 ~state2 ~k1 ~v1 ~state1:V3_12 ~stack1 ~t1
+        | Node_v ->
+          let k1, v1 = match t1 with
+            | Node { k0; v0; _ } -> k0, v0
+          in
+          step2_value1 ~acc ~user ~stack2 ~t2 ~state2 ~k1 ~v1 ~state1:Node_v ~stack1 ~t1
+    and step2_value1
+      : 'c1 'c2 'nk1 'nk2 'v1 'v2 .
+      acc:('v1, 'v2) F.acc -> user:('v1 , 'v2) F.user_param
+      -> stack1:'v1 Stack.t -> t1:('c1, 'nk1, 'v1) node -> state1:'c1 state -> k1:K.t -> v1:'v1
+      -> stack2:'v2 Stack.t -> t2:('c2, 'nk2, 'v2) node -> state2:'c2 state
+      -> ('v1, 'v2) F.acc =
+      fun
+        (type c1 c2 nk1 nk2 v1 v2)
+        ~(acc : (v1, v2) F.acc) ~user
+        ~stack1 ~(t1 : (c1, nk1, v1) node) ~(state1 : c1 state) ~k1 ~(v1 : v1)
+        ~stack2 ~(t2 : (c2, nk2, v2) node) ~(state2 : c2 state) ->
+        match state2 with
+        | Empty ->
+          finish1 ~acc ~user ~stack1 ~t1 ~state1
+        | Start ->
+          begin match t2 with
+            | Empty _ ->
+              finish1 ~acc ~user ~stack1 ~t1 ~state1
+            | Node { n1 = T t2; _} as s0 ->
+              step2_value1 ~acc ~user ~stack1 ~t1 ~state1 ~k1 ~v1 ~stack2:(s0::stack2) ~t2 ~state2:Start
+            | V1 { k1 = k2; v1 = v2; }
+            | V2 { k11 = k2; v11 = v2; _ }
+            | V3 { k11 = k2; v11 = v2; _ } ->
+              step_value ~acc ~user ~stack1 ~t1 ~state1 ~k1 ~v1 ~stack2 ~t2 ~state2 ~k2 ~v2
+          end
+        | V2_1 ->
+          let k2, v2 = match t2 with
+            | V2 { k1 = k2; v1 = v2; _ } -> k2, v2
+          in
           step_value ~acc ~user ~stack1 ~t1 ~state1 ~k1 ~v1 ~stack2 ~t2 ~state2 ~k2 ~v2
-        | V1 { k1 = k1; v1 = v1; }, _, V2 { k11 = k2; v11 = v2; _ }, Start->
+        | V3_1 ->
+          let k2, v2 = match t2 with
+            | V3 { k1 = k2; v1 = v2; _ } -> k2, v2
+          in
           step_value ~acc ~user ~stack1 ~t1 ~state1 ~k1 ~v1 ~stack2 ~t2 ~state2 ~k2 ~v2
-        | V1 { k1 = k1; v1 = v1; }, _, V2 { k1 = k2; v1 = v2; _ }, V2_1->
+        | V3_12 ->
+          let k2, v2 = match t2 with
+            | V3 { k12 = k2; v12 = v2; _ } -> k2, v2
+          in
           step_value ~acc ~user ~stack1 ~t1 ~state1 ~k1 ~v1 ~stack2 ~t2 ~state2 ~k2 ~v2
-        | V1 { k1 = k1; v1 = v1; }, _, V3 { k11 = k2; v11 = v2; _ }, Start->
+        | Node_v ->
+          let k2, v2 = match t2 with
+            | Node { k0 = k2; v0 = v2; _ } -> k2, v2
+          in
           step_value ~acc ~user ~stack1 ~t1 ~state1 ~k1 ~v1 ~stack2 ~t2 ~state2 ~k2 ~v2
-        | V1 { k1 = k1; v1 = v1; }, _, V3 { k1 = k2; v1 = v2; _ }, V3_1->
-          step_value ~acc ~user ~stack1 ~t1 ~state1 ~k1 ~v1 ~stack2 ~t2 ~state2 ~k2 ~v2
-        | V1 { k1 = k1; v1 = v1; }, _, V3 { k1 = k2; v1 = v2; _ }, V3_12->
-          step_value ~acc ~user ~stack1 ~t1 ~state1 ~k1 ~v1 ~stack2 ~t2 ~state2 ~k2 ~v2
-        | V1 { k1 = k1; v1 = v1; }, _, Node { k0 = k2; v0 = v2; _ }, Node_v->
-          step_value ~acc ~user ~stack1 ~t1 ~state1 ~k1 ~v1 ~stack2 ~t2 ~state2 ~k2 ~v2
-        | V2 { k11 = k1; v11 = v1; _ }, Start, V1 { k1 = k2; v1 = v2; }, _->
-          step_value ~acc ~user ~stack1 ~t1 ~state1 ~k1 ~v1 ~stack2 ~t2 ~state2 ~k2 ~v2
-        | V2 { k11 = k1; v11 = v1; _ }, Start, V2 { k11 = k2; v11 = v2; _ }, Start->
-          step_value ~acc ~user ~stack1 ~t1 ~state1 ~k1 ~v1 ~stack2 ~t2 ~state2 ~k2 ~v2
-        | V2 { k11 = k1; v11 = v1; _ }, Start, V2 { k1 = k2; v1 = v2; _ }, V2_1->
-          step_value ~acc ~user ~stack1 ~t1 ~state1 ~k1 ~v1 ~stack2 ~t2 ~state2 ~k2 ~v2
-        | V2 { k11 = k1; v11 = v1; _ }, Start, V3 { k11 = k2; v11 = v2; _ }, Start->
-          step_value ~acc ~user ~stack1 ~t1 ~state1 ~k1 ~v1 ~stack2 ~t2 ~state2 ~k2 ~v2
-        | V2 { k11 = k1; v11 = v1; _ }, Start, V3 { k1 = k2; v1 = v2; _ }, V3_1->
-          step_value ~acc ~user ~stack1 ~t1 ~state1 ~k1 ~v1 ~stack2 ~t2 ~state2 ~k2 ~v2
-        | V2 { k11 = k1; v11 = v1; _ }, Start, V3 { k1 = k2; v1 = v2; _ }, V3_12->
-          step_value ~acc ~user ~stack1 ~t1 ~state1 ~k1 ~v1 ~stack2 ~t2 ~state2 ~k2 ~v2
-        | V2 { k11 = k1; v11 = v1; _ }, Start, Node { k0 = k2; v0 = v2; _ }, Node_v->
-          step_value ~acc ~user ~stack1 ~t1 ~state1 ~k1 ~v1 ~stack2 ~t2 ~state2 ~k2 ~v2
-        | V2 { k1 = k1; v1 = v1; _ }, V2_1, V1 { k1 = k2; v1 = v2; }, _->
-          step_value ~acc ~user ~stack1 ~t1 ~state1 ~k1 ~v1 ~stack2 ~t2 ~state2 ~k2 ~v2
-        | V2 { k1 = k1; v1 = v1; _ }, V2_1, V2 { k11 = k2; v11 = v2; _ }, Start->
-          step_value ~acc ~user ~stack1 ~t1 ~state1 ~k1 ~v1 ~stack2 ~t2 ~state2 ~k2 ~v2
-        | V2 { k1 = k1; v1 = v1; _ }, V2_1, V2 { k1 = k2; v1 = v2; _ }, V2_1->
-          step_value ~acc ~user ~stack1 ~t1 ~state1 ~k1 ~v1 ~stack2 ~t2 ~state2 ~k2 ~v2
-        | V2 { k1 = k1; v1 = v1; _ }, V2_1, V3 { k11 = k2; v11 = v2; _ }, Start->
-          step_value ~acc ~user ~stack1 ~t1 ~state1 ~k1 ~v1 ~stack2 ~t2 ~state2 ~k2 ~v2
-        | V2 { k1 = k1; v1 = v1; _ }, V2_1, V3 { k1 = k2; v1 = v2; _ }, V3_1->
-          step_value ~acc ~user ~stack1 ~t1 ~state1 ~k1 ~v1 ~stack2 ~t2 ~state2 ~k2 ~v2
-        | V2 { k1 = k1; v1 = v1; _ }, V2_1, V3 { k1 = k2; v1 = v2; _ }, V3_12->
-          step_value ~acc ~user ~stack1 ~t1 ~state1 ~k1 ~v1 ~stack2 ~t2 ~state2 ~k2 ~v2
-        | V2 { k1 = k1; v1 = v1; _ }, V2_1, Node { k0 = k2; v0 = v2; _ }, Node_v->
-          step_value ~acc ~user ~stack1 ~t1 ~state1 ~k1 ~v1 ~stack2 ~t2 ~state2 ~k2 ~v2
-        | V3 { k11 = k1; v11 = v1; _ }, Start, V1 { k1 = k2; v1 = v2; }, _->
-          step_value ~acc ~user ~stack1 ~t1 ~state1 ~k1 ~v1 ~stack2 ~t2 ~state2 ~k2 ~v2
-        | V3 { k11 = k1; v11 = v1; _ }, Start, V2 { k11 = k2; v11 = v2; _ }, Start->
-          step_value ~acc ~user ~stack1 ~t1 ~state1 ~k1 ~v1 ~stack2 ~t2 ~state2 ~k2 ~v2
-        | V3 { k11 = k1; v11 = v1; _ }, Start, V2 { k1 = k2; v1 = v2; _ }, V2_1->
-          step_value ~acc ~user ~stack1 ~t1 ~state1 ~k1 ~v1 ~stack2 ~t2 ~state2 ~k2 ~v2
-        | V3 { k11 = k1; v11 = v1; _ }, Start, V3 { k11 = k2; v11 = v2; _ }, Start->
-          step_value ~acc ~user ~stack1 ~t1 ~state1 ~k1 ~v1 ~stack2 ~t2 ~state2 ~k2 ~v2
-        | V3 { k11 = k1; v11 = v1; _ }, Start, V3 { k1 = k2; v1 = v2; _ }, V3_1->
-          step_value ~acc ~user ~stack1 ~t1 ~state1 ~k1 ~v1 ~stack2 ~t2 ~state2 ~k2 ~v2
-        | V3 { k11 = k1; v11 = v1; _ }, Start, V3 { k1 = k2; v1 = v2; _ }, V3_12->
-          step_value ~acc ~user ~stack1 ~t1 ~state1 ~k1 ~v1 ~stack2 ~t2 ~state2 ~k2 ~v2
-        | V3 { k11 = k1; v11 = v1; _ }, Start, Node { k0 = k2; v0 = v2; _ }, Node_v->
-          step_value ~acc ~user ~stack1 ~t1 ~state1 ~k1 ~v1 ~stack2 ~t2 ~state2 ~k2 ~v2
-        | V3 { k1 = k1; v1 = v1; _ }, V3_1, V1 { k1 = k2; v1 = v2; }, _->
-          step_value ~acc ~user ~stack1 ~t1 ~state1 ~k1 ~v1 ~stack2 ~t2 ~state2 ~k2 ~v2
-        | V3 { k1 = k1; v1 = v1; _ }, V3_1, V2 { k11 = k2; v11 = v2; _ }, Start->
-          step_value ~acc ~user ~stack1 ~t1 ~state1 ~k1 ~v1 ~stack2 ~t2 ~state2 ~k2 ~v2
-        | V3 { k1 = k1; v1 = v1; _ }, V3_1, V2 { k1 = k2; v1 = v2; _ }, V2_1->
-          step_value ~acc ~user ~stack1 ~t1 ~state1 ~k1 ~v1 ~stack2 ~t2 ~state2 ~k2 ~v2
-        | V3 { k1 = k1; v1 = v1; _ }, V3_1, V3 { k11 = k2; v11 = v2; _ }, Start->
-          step_value ~acc ~user ~stack1 ~t1 ~state1 ~k1 ~v1 ~stack2 ~t2 ~state2 ~k2 ~v2
-        | V3 { k1 = k1; v1 = v1; _ }, V3_1, V3 { k1 = k2; v1 = v2; _ }, V3_1->
-          step_value ~acc ~user ~stack1 ~t1 ~state1 ~k1 ~v1 ~stack2 ~t2 ~state2 ~k2 ~v2
-        | V3 { k1 = k1; v1 = v1; _ }, V3_1, V3 { k1 = k2; v1 = v2; _ }, V3_12->
-          step_value ~acc ~user ~stack1 ~t1 ~state1 ~k1 ~v1 ~stack2 ~t2 ~state2 ~k2 ~v2
-        | V3 { k1 = k1; v1 = v1; _ }, V3_1, Node { k0 = k2; v0 = v2; _ }, Node_v->
-          step_value ~acc ~user ~stack1 ~t1 ~state1 ~k1 ~v1 ~stack2 ~t2 ~state2 ~k2 ~v2
-        | V3 { k1 = k1; v1 = v1; _ }, V3_12, V1 { k1 = k2; v1 = v2; }, _->
-          step_value ~acc ~user ~stack1 ~t1 ~state1 ~k1 ~v1 ~stack2 ~t2 ~state2 ~k2 ~v2
-        | V3 { k1 = k1; v1 = v1; _ }, V3_12, V2 { k11 = k2; v11 = v2; _ }, Start->
-          step_value ~acc ~user ~stack1 ~t1 ~state1 ~k1 ~v1 ~stack2 ~t2 ~state2 ~k2 ~v2
-        | V3 { k1 = k1; v1 = v1; _ }, V3_12, V2 { k1 = k2; v1 = v2; _ }, V2_1->
-          step_value ~acc ~user ~stack1 ~t1 ~state1 ~k1 ~v1 ~stack2 ~t2 ~state2 ~k2 ~v2
-        | V3 { k1 = k1; v1 = v1; _ }, V3_12, V3 { k11 = k2; v11 = v2; _ }, Start->
-          step_value ~acc ~user ~stack1 ~t1 ~state1 ~k1 ~v1 ~stack2 ~t2 ~state2 ~k2 ~v2
-        | V3 { k1 = k1; v1 = v1; _ }, V3_12, V3 { k1 = k2; v1 = v2; _ }, V3_1->
-          step_value ~acc ~user ~stack1 ~t1 ~state1 ~k1 ~v1 ~stack2 ~t2 ~state2 ~k2 ~v2
-        | V3 { k1 = k1; v1 = v1; _ }, V3_12, V3 { k1 = k2; v1 = v2; _ }, V3_12->
-          step_value ~acc ~user ~stack1 ~t1 ~state1 ~k1 ~v1 ~stack2 ~t2 ~state2 ~k2 ~v2
-        | V3 { k1 = k1; v1 = v1; _ }, V3_12, Node { k0 = k2; v0 = v2; _ }, Node_v->
-          step_value ~acc ~user ~stack1 ~t1 ~state1 ~k1 ~v1 ~stack2 ~t2 ~state2 ~k2 ~v2
-        | Node { k0 = k1; v0 = v1; _ }, Node_v, V1 { k1 = k2; v1 = v2; }, _->
-          step_value ~acc ~user ~stack1 ~t1 ~state1 ~k1 ~v1 ~stack2 ~t2 ~state2 ~k2 ~v2
-        | Node { k0 = k1; v0 = v1; _ }, Node_v, V2 { k11 = k2; v11 = v2; _ }, Start->
-          step_value ~acc ~user ~stack1 ~t1 ~state1 ~k1 ~v1 ~stack2 ~t2 ~state2 ~k2 ~v2
-        | Node { k0 = k1; v0 = v1; _ }, Node_v, V2 { k1 = k2; v1 = v2; _ }, V2_1->
-          step_value ~acc ~user ~stack1 ~t1 ~state1 ~k1 ~v1 ~stack2 ~t2 ~state2 ~k2 ~v2
-        | Node { k0 = k1; v0 = v1; _ }, Node_v, V3 { k11 = k2; v11 = v2; _ }, Start->
-          step_value ~acc ~user ~stack1 ~t1 ~state1 ~k1 ~v1 ~stack2 ~t2 ~state2 ~k2 ~v2
-        | Node { k0 = k1; v0 = v1; _ }, Node_v, V3 { k1 = k2; v1 = v2; _ }, V3_1->
-          step_value ~acc ~user ~stack1 ~t1 ~state1 ~k1 ~v1 ~stack2 ~t2 ~state2 ~k2 ~v2
-        | Node { k0 = k1; v0 = v1; _ }, Node_v, V3 { k1 = k2; v1 = v2; _ }, V3_12->
-          step_value ~acc ~user ~stack1 ~t1 ~state1 ~k1 ~v1 ~stack2 ~t2 ~state2 ~k2 ~v2
-        | Node { k0 = k1; v0 = v1; _ }, Node_v, Node { k0 = k2; v0 = v2; _ }, Node_v->
-          step_value ~acc ~user ~stack1 ~t1 ~state1 ~k1 ~v1 ~stack2 ~t2 ~state2 ~k2 ~v2
-(*$*)
     and step_value
       : 'c1 'c2 'nk1 'nk2 'v1 'v2 .
       acc:('v1, 'v2) F.acc -> user:('v1 , 'v2) F.user_param
@@ -1724,13 +1678,13 @@ let balance_shallow ~n1 ~k0 ~v0 ~n2 =
         match%compare K.compare k1 k2 with
         | Eq ->
           let acc = F.both_present acc user ~k:k1 ~v1 ~v2 in
-          step_next_12 ~acc ~user ~stack1 ~t1 ~state1 ~stack2 ~t2 ~state2
+          (step_next_12 [@inlined hint]) ~acc ~user ~stack1 ~t1 ~state1 ~stack2 ~t2 ~state2
         | Lt ->
           let acc = F.present_1 acc user ~is_tail:false ~k:k1 ~v:v1 in
-          step_next_1 ~acc ~user ~stack1 ~t1 ~state1 ~stack2 ~t2 ~state2 ~k2 ~v2
+          (step_next_1 [@inlined hint]) ~acc ~user ~stack1 ~t1 ~state1 ~stack2 ~t2 ~state2 ~k2 ~v2
         | Gt ->
           let acc = F.present_2 acc user ~is_tail:false ~k:k2 ~v:v2 in
-          step_next_2 ~acc ~user ~stack1 ~t1 ~state1 ~stack2 ~t2 ~state2 ~k1 ~v1
+          (step_next_2 [@inlined hint]) ~acc ~user ~stack1 ~t1 ~state1 ~stack2 ~t2 ~state2 ~k1 ~v1
     and step_next_12
       : 'c1 'c2 'nk1 'nk2 'v1 'v2 .
       acc:('v1, 'v2) F.acc -> user:('v1 , 'v2) F.user_param
@@ -1796,7 +1750,7 @@ let balance_shallow ~n1 ~k0 ~v0 ~n2 =
           | `Node_v, (`V1 | `V2_1 | `V3_12 ) ->
             Printf.printf "          step_up2 ~acc ~user ~stack1 ~t1:n1 ~state1:Start ~stack2\n";
           | `Node_v, `Node_v ->
-            Printf.printf "          step ~acc ~user ~stack1 ~t1:n1 ~state1:Start ~stack2 ~t2:n2 ~state2:Start\n";
+            Printf.printf "          step1 ~acc ~user ~stack1 ~t1:n1 ~state1:Start ~stack2 ~t2:n2 ~state2:Start\n";
           | (`V1 | `V2_1 | `V3_12 ), _ ->
             Printf.printf "          step_up1 ~acc ~user ~stack1 ~stack2 ~t2 ~state2:%s\n"
               (next_state case2);
@@ -1804,10 +1758,10 @@ let balance_shallow ~n1 ~k0 ~v0 ~n2 =
             Printf.printf "          step_up2 ~acc ~user ~stack1 ~t1 ~state1:%s ~stack2\n"
               (next_state case1);
           | `Node_v, _ ->
-            Printf.printf "          step ~acc ~user ~stack1 ~t1:n1 ~state1:Start ~stack2 ~t2 ~state2:%s\n"
+            Printf.printf "          step1 ~acc ~user ~stack1 ~t1:n1 ~state1:Start ~stack2 ~t2 ~state2:%s\n"
               (next_state case2);
           | _, `Node_v ->
-            Printf.printf "          step ~acc ~user ~stack1 ~t1 ~state1:%s ~stack2 ~t2:n2 ~state2:Start\n"
+            Printf.printf "          step1 ~acc ~user ~stack1 ~t1 ~state1:%s ~stack2 ~t2:n2 ~state2:Start\n"
               (next_state case1);
           | _ ->
             Printf.printf "          step_value ~acc ~user ~stack1 ~t1 ~state1:%s ~k1 ~v1 ~stack2 ~t2 ~state2:%s ~k2 ~v2\n"
@@ -1841,7 +1795,7 @@ let balance_shallow ~n1 ~k0 ~v0 ~n2 =
         | V2 { k1 = k1; v1 = v1; _ }, Start, V3 _, V3_12 ->
           step_up2 ~acc ~user ~stack1 ~t1 ~state1:V2_1 ~stack2
         | V2 { k1 = k1; v1 = v1; _ }, Start, Node { n2 = T n2; _ }, Node_v ->
-          step ~acc ~user ~stack1 ~t1 ~state1:V2_1 ~stack2 ~t2:n2 ~state2:Start
+          step1 ~acc ~user ~stack1 ~t1 ~state1:V2_1 ~stack2 ~t2:n2 ~state2:Start
         | V2 _, V2_1, V1 _, _ ->
           step_up12 ~acc ~user ~stack1 ~stack2
         | V2 _, V2_1, V2 { k1 = k2; v1 = v2; _ }, Start ->
@@ -1869,7 +1823,7 @@ let balance_shallow ~n1 ~k0 ~v0 ~n2 =
         | V3 { k1 = k1; v1 = v1; _ }, Start, V3 _, V3_12 ->
           step_up2 ~acc ~user ~stack1 ~t1 ~state1:V3_1 ~stack2
         | V3 { k1 = k1; v1 = v1; _ }, Start, Node { n2 = T n2; _ }, Node_v ->
-          step ~acc ~user ~stack1 ~t1 ~state1:V3_1 ~stack2 ~t2:n2 ~state2:Start
+          step1 ~acc ~user ~stack1 ~t1 ~state1:V3_1 ~stack2 ~t2:n2 ~state2:Start
         | V3 { k12 = k1; v12 = v1; _ }, V3_1, V1 _, _ ->
           step_up2 ~acc ~user ~stack1 ~t1 ~state1:V3_12 ~stack2
         | V3 { k12 = k1; v12 = v1; _ }, V3_1, V2 { k1 = k2; v1 = v2; _ }, Start ->
@@ -1883,7 +1837,7 @@ let balance_shallow ~n1 ~k0 ~v0 ~n2 =
         | V3 { k12 = k1; v12 = v1; _ }, V3_1, V3 _, V3_12 ->
           step_up2 ~acc ~user ~stack1 ~t1 ~state1:V3_12 ~stack2
         | V3 { k12 = k1; v12 = v1; _ }, V3_1, Node { n2 = T n2; _ }, Node_v ->
-          step ~acc ~user ~stack1 ~t1 ~state1:V3_12 ~stack2 ~t2:n2 ~state2:Start
+          step1 ~acc ~user ~stack1 ~t1 ~state1:V3_12 ~stack2 ~t2:n2 ~state2:Start
         | V3 _, V3_12, V1 _, _ ->
           step_up12 ~acc ~user ~stack1 ~stack2
         | V3 _, V3_12, V2 { k1 = k2; v1 = v2; _ }, Start ->
@@ -1901,17 +1855,17 @@ let balance_shallow ~n1 ~k0 ~v0 ~n2 =
         | Node { n2 = T n1; _ }, Node_v, V1 _, _ ->
           step_up2 ~acc ~user ~stack1 ~t1:n1 ~state1:Start ~stack2
         | Node { n2 = T n1; _ }, Node_v, V2 { k1 = k2; v1 = v2; _ }, Start ->
-          step ~acc ~user ~stack1 ~t1:n1 ~state1:Start ~stack2 ~t2 ~state2:V2_1
+          step1 ~acc ~user ~stack1 ~t1:n1 ~state1:Start ~stack2 ~t2 ~state2:V2_1
         | Node { n2 = T n1; _ }, Node_v, V2 _, V2_1 ->
           step_up2 ~acc ~user ~stack1 ~t1:n1 ~state1:Start ~stack2
         | Node { n2 = T n1; _ }, Node_v, V3 { k1 = k2; v1 = v2; _ }, Start ->
-          step ~acc ~user ~stack1 ~t1:n1 ~state1:Start ~stack2 ~t2 ~state2:V3_1
+          step1 ~acc ~user ~stack1 ~t1:n1 ~state1:Start ~stack2 ~t2 ~state2:V3_1
         | Node { n2 = T n1; _ }, Node_v, V3 { k12 = k2; v12 = v2; _ }, V3_1 ->
-          step ~acc ~user ~stack1 ~t1:n1 ~state1:Start ~stack2 ~t2 ~state2:V3_12
+          step1 ~acc ~user ~stack1 ~t1:n1 ~state1:Start ~stack2 ~t2 ~state2:V3_12
         | Node { n2 = T n1; _ }, Node_v, V3 _, V3_12 ->
           step_up2 ~acc ~user ~stack1 ~t1:n1 ~state1:Start ~stack2
         | Node { n2 = T n1; _ }, Node_v, Node { n2 = T n2; _ }, Node_v ->
-          step ~acc ~user ~stack1 ~t1:n1 ~state1:Start ~stack2 ~t2:n2 ~state2:Start
+          step1 ~acc ~user ~stack1 ~t1:n1 ~state1:Start ~stack2 ~t2:n2 ~state2:Start
 (*$*)
     and step_next_1
       : 'c1 'c2 'nk1 'nk2 'v1 'v2 .
@@ -1931,13 +1885,13 @@ let balance_shallow ~n1 ~k0 ~v0 ~n2 =
         | V2 _, V2_1 -> step_up1 ~acc ~user ~stack1 ~stack2 ~t2 ~state2
         | V3 _, V3_12 -> step_up1 ~acc ~user ~stack1 ~stack2 ~t2 ~state2
         | V3 _, Start ->
-          step ~acc ~user ~stack1 ~t1 ~state1:V3_1 ~stack2 ~t2 ~state2
+          step1 ~acc ~user ~stack1 ~t1 ~state1:V3_1 ~stack2 ~t2 ~state2
         | V3 _, V3_1 ->
-          step ~acc ~user ~stack1 ~t1 ~state1:V3_12 ~stack2 ~t2 ~state2
+          step1 ~acc ~user ~stack1 ~t1 ~state1:V3_12 ~stack2 ~t2 ~state2
         | V2 _, Start ->
-          step ~acc ~user ~stack1 ~t1 ~state1:V2_1 ~stack2 ~t2 ~state2
+          step1 ~acc ~user ~stack1 ~t1 ~state1:V2_1 ~stack2 ~t2 ~state2
         | Node { n2 = T t1; _}, Node_v ->
-          step ~acc ~user ~stack1 ~t1 ~state1:Start ~stack2 ~t2 ~state2
+          step1 ~acc ~user ~stack1 ~t1 ~state1:Start ~stack2 ~t2 ~state2
     and step_next_2
       : 'c1 'c2 'nk1 'nk2 'v1 'v2 .
       acc:('v1, 'v2) F.acc -> user:('v1 , 'v2) F.user_param
@@ -1956,13 +1910,13 @@ let balance_shallow ~n1 ~k0 ~v0 ~n2 =
         | V2 _, V2_1 -> step_up2 ~acc ~user ~stack2 ~stack1 ~t1 ~state1
         | V3 _, V3_12 -> step_up2 ~acc ~user ~stack2 ~stack1 ~t1 ~state1
         | V3 _, Start ->
-          step ~acc ~user ~stack2 ~t2 ~state2:V3_1 ~stack1 ~t1 ~state1
+          step1 ~acc ~user ~stack2 ~t2 ~state2:V3_1 ~stack1 ~t1 ~state1
         | V3 _, V3_1 ->
-          step ~acc ~user ~stack2 ~t2 ~state2:V3_12 ~stack1 ~t1 ~state1
+          step1 ~acc ~user ~stack2 ~t2 ~state2:V3_12 ~stack1 ~t1 ~state1
         | V2 _, Start ->
-          step ~acc ~user ~stack2 ~t2 ~state2:V2_1 ~stack1 ~t1 ~state1
+          step1 ~acc ~user ~stack2 ~t2 ~state2:V2_1 ~stack1 ~t1 ~state1
         | Node { n2 = T t2; _}, Node_v ->
-          step ~acc ~user ~stack2 ~t2 ~state2:Start ~stack1 ~t1 ~state1
+          step1 ~acc ~user ~stack2 ~t2 ~state2:Start ~stack1 ~t1 ~state1
     and step_up1
       : 'c1 'c2 'nk1 'nk2 'v1 'v2 .
           acc:('v1, 'v2) F.acc -> user:('v1 , 'v2) F.user_param
@@ -1977,7 +1931,7 @@ let balance_shallow ~n1 ~k0 ~v0 ~n2 =
         match stack1 with
         | [] -> finish2 ~acc ~user ~stack2 ~t2 ~state2
         | t1 :: stack1 ->
-          step ~acc ~user ~stack1 ~t1 ~state1:Node_v ~stack2 ~t2 ~state2
+          step1 ~acc ~user ~stack1 ~t1 ~state1:Node_v ~stack2 ~t2 ~state2
     and step_up2
       : 'c1 'c2 'nk1 'nk2 'v1 'v2 .
           acc:('v1, 'v2) F.acc -> user:('v1 , 'v2) F.user_param
@@ -1992,7 +1946,7 @@ let balance_shallow ~n1 ~k0 ~v0 ~n2 =
         match stack2 with
         | [] -> finish1 ~acc ~user ~stack1 ~t1 ~state1
         | t2 :: stack2 ->
-          step ~acc ~user ~stack2 ~t2 ~state2:Node_v ~stack1 ~t1 ~state1
+          step1 ~acc ~user ~stack2 ~t2 ~state2:Node_v ~stack1 ~t1 ~state1
     and step_up12 :
       'v1 'v2 .
         acc:('v1, 'v2) F.acc -> user:('v1 , 'v2) F.user_param
@@ -2003,7 +1957,7 @@ let balance_shallow ~n1 ~k0 ~v0 ~n2 =
       | [], t2 :: stack2 -> finish2 ~acc ~user ~stack2 ~t2 ~state2:Node_v
       | t1 :: stack1, [] -> finish1 ~acc ~user ~stack1 ~t1 ~state1:Node_v
       | t1 :: stack1, t2 :: stack2 ->
-        step ~acc ~user ~stack1 ~t1 ~state1:Node_v ~stack2 ~t2 ~state2:Node_v
+        step1 ~acc ~user ~stack1 ~t1 ~state1:Node_v ~stack2 ~t2 ~state2:Node_v
     and finish2 :
       'c2 'nk2 'v2 'v1.
       acc:('v1, 'v2) F.acc -> user:('v1, 'v2) F.user_param
@@ -2072,7 +2026,7 @@ let balance_shallow ~n1 ~k0 ~v0 ~n2 =
       | t1 :: stack1 -> finish1 ~acc ~user ~stack1 ~t1 ~state1:Start
 
     let fold ~acc ~user (T t1) (T t2) =
-      step ~acc ~user ~stack1:Stack.empty ~t1 ~state1:Start ~stack2:Stack.empty ~t2 ~state2:Start
+      step1 ~acc ~user ~stack1:Stack.empty ~t1 ~state1:Start ~stack2:Stack.empty ~t2 ~state2:Start
 
   end
 
