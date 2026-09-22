@@ -852,13 +852,13 @@ let balance_shallow ~n1 ~k0 ~v0 ~n2 =
         join ~n1:l ~k0 ~v0 ~n2:r'
       end
 
-  let rec filter_map ~f t =
+  let rec filter_map ~f user t =
     let erase = Uopt.none in
     let map = Uopt.some in
     match t with
     | T (Empty _) -> empty
     | T (V1 { k1; v1 }) ->
-      begin match%optional.Uopt f ~erase ~map k1 v1 with
+      begin match%optional.Uopt f user ~k:k1 ~v:v1 ~erase ~map with
       | None -> empty
       | Some v1' ->
         if phys_same v1 v1'
@@ -867,7 +867,7 @@ let balance_shallow ~n1 ~k0 ~v0 ~n2 =
       end
     | T (V2 { k11; v11; k1; v1 }) ->
       begin match%optional.Uopt
-          f ~erase ~map k11 v11, f ~erase ~map k1 v1
+          f user ~k:k11 ~v:v11 ~erase ~map, f user ~k:k1 ~v:v1 ~erase ~map
         with
         | None, None -> empty
         | Some v11', None -> T (V1 { k1 = k11; v1 = v11' })
@@ -879,9 +879,9 @@ let balance_shallow ~n1 ~k0 ~v0 ~n2 =
       end
     | T (V3 { k11; v11; k1; v1; k12; v12 }) ->
       begin match%optional.Uopt
-          f ~erase ~map k11 v11
-        , f ~erase ~map k1 v1
-        , f ~erase ~map k12 v12
+          f user ~k:k11 ~v:v11 ~erase ~map
+        , f user ~k:k1 ~v:v1 ~erase ~map
+        , f user ~k:k12 ~v:v12 ~erase ~map
         with
         | None, None, None -> empty
         | Some v11', None, None -> T (V1 { k1 = k11; v1 = v11' })
@@ -896,15 +896,33 @@ let balance_shallow ~n1 ~k0 ~v0 ~n2 =
           else T (V3 { k11; v11 = v11'; k1; v1 = v1'; k12; v12 = v12' })
       end
     | T (Node { n1; k0; v0; n2 }) ->
-      let n1' = filter_map ~f n1 in
-      let n2' = filter_map ~f n2 in
-      match%optional.Uopt f ~erase ~map k0 v0 with
+      let n1' = filter_map ~f user n1 in
+      let n2' = filter_map ~f user n2 in
+      match%optional.Uopt f user ~k:k0 ~v:v0 ~erase ~map with
       | None -> concat_unchecked n1' n2'
       | Some v0' ->
         if phys_same v0 v0' && phys_same n1 n1' && phys_same n2 n2'
         then Obj.magic t
         else join ~n1:n1' ~k0 ~v0:v0' ~n2:n2'
 
+  module type Merger = sig
+    type ('a1, 'a2) res
+    type ('a1, 'a2) user_param
+
+    val both_present : ('a1, 'a2) user_param -> k:K.t -> v1:'a1 -> v2:'a2 -> erase:'cout -> map:(('a1, 'a2) res -> 'cout) -> 'cout
+    val present_1 : ('a1, 'a2) user_param -> k:K.t -> v:'a1 -> erase:'cout -> map:(('a1, 'a2) res -> 'cout) -> 'cout
+    val present_2 : ('a1, 'a2) user_param -> k:K.t -> v:'a2 -> erase:'cout -> map:(('a1, 'a2) res -> 'cout) -> 'cout
+  end
+
+  module Merge(Merger : Merger) = struct
+
+    let rec merge user t1 t2 =
+      match t1, t2 with
+      | T (Empty _), T (Empty _) -> empty
+      | T (Empty _), _ -> filter_map ~f:Merger.present_2 user t2
+      | _, T (Empty _) -> filter_map ~f:Merger.present_1 user t1
+
+  end
 
   module Change = struct
     let [@inline hint] unchanged t = T t
