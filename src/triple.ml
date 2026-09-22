@@ -701,6 +701,7 @@ let balance_shallow ~n1 ~k0 ~v0 ~n2 =
     let left t = Uopt.unsafe_value t.left
     let key t = Uopt.unsafe_value t.key
     let value t = Uopt.unsafe_value t.value
+    let value_opt t = t.value
     let right t = Uopt.unsafe_value t.right
 
     let set t l k v r =
@@ -916,12 +917,59 @@ let balance_shallow ~n1 ~k0 ~v0 ~n2 =
 
   module Merge(Merger : Merger) = struct
 
-    let rec merge user t1 t2 =
+    let erase = Uopt.none
+    let map = Uopt.some
+
+    let rec merge ~split_return user t1 t2 =
       match t1, t2 with
       | T (Empty _), T (Empty _) -> empty
       | T (Empty _), _ -> filter_map ~f:Merger.present_2 user t2
       | _, T (Empty _) -> filter_map ~f:Merger.present_1 user t1
-
+      | _ ->
+        if weight t1 > weight t2
+        then begin
+          match t1 with
+          | T (V1 { k1; v1 }) -> merge_left ~split_return user ~l1:t1 ~k:k1 ~v:v1 ~r1:empty ~t2
+          | T (V2 { k11; v11; k1; v1 }) -> merge_left ~split_return user ~l1:t1 ~k:k11 ~v:v11 ~r1:(T (V1 { k1; v1 })) ~t2
+          | T (V3 { k11; v11; k1; v1; k12; v12 }) -> merge_left ~split_return user ~l1:t1 ~k:k11 ~v:v11 ~r1:(T (V2 { k11 = k1; v11 = v1; k1 = k12; v1 = v12 })) ~t2
+          | T (Node { n1; k0; v0; n2 }) -> merge_left ~split_return user ~l1:n1 ~k:k0 ~v:v0 ~r1:n2 ~t2
+          | _ -> assert false
+        end else begin
+          match t2 with
+          | T (V1 { k1; v1 }) -> merge_right ~split_return user ~t1 ~l2:t2 ~k:k1 ~v:v1 ~r2:empty
+          | T (V2 { k11; v11; k1; v1 }) -> merge_right ~split_return user ~t1 ~l2:t2 ~k:k11 ~v:v11 ~r2:(T (V1 { k1; v1 }))
+          | T (V3 { k11; v11; k1; v1; k12; v12 }) -> merge_right ~split_return user ~t1 ~l2:t2 ~k:k11 ~v:v11 ~r2:(T (V2 { k11 = k1; v11 = v1; k1 = k12; v1 = v12 }))
+          | T (Node { n1; k0; v0; n2 }) -> merge_right ~split_return user ~t1 ~l2:n1 ~k:k0 ~v:v0 ~r2:n2
+          | _ -> assert false
+        end
+    and merge_left ~split_return user ~l1 ~k ~v ~r1 ~t2 =
+      split ~return:split_return t2 k;
+      let l2 = Split_return.left split_return in
+      let r2 = Split_return.right split_return in
+      let sv = Split_return.value_opt split_return in
+      let l = merge ~split_return user l1 l2 in
+      let r = merge ~split_return user r1 r2 in
+      match%optional.Uopt
+        match%optional.Uopt sv with
+        | None -> Merger.present_1 user ~k ~v ~erase ~map
+        | Some v2 -> Merger.both_present user ~k ~v1:v ~v2 ~erase ~map
+      with
+      | None -> concat_unchecked l r
+      | Some v -> join ~n1:l ~k0:k ~v0:v ~n2:r
+    and merge_right ~split_return user ~t1 ~l2 ~k ~v ~r2 =
+      split ~return:split_return t1 k;
+      let l1 = Split_return.left split_return in
+      let r1 = Split_return.right split_return in
+      let sv = Split_return.value_opt split_return in
+      let l = merge ~split_return user l1 l2 in
+      let r = merge ~split_return user r1 r2 in
+      match%optional.Uopt
+        match%optional.Uopt sv with
+        | None -> Merger.present_2 user ~k ~v ~erase ~map
+        | Some v1 -> Merger.both_present user ~k ~v1 ~v2:v ~erase ~map
+      with
+      | None -> concat_unchecked l r
+      | Some v -> join ~n1:l ~k0:k ~v0:v ~n2:r
   end
 
   module Change = struct
