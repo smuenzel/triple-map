@@ -588,6 +588,13 @@ let balance_shallow ~n1 ~k0 ~v0 ~n2 =
     val is_some : 'a t -> bool
 
     val unsafe_value : 'a t -> 'a
+
+    module Optional_syntax : sig
+      module Optional_syntax : sig
+        val is_none : 'a t -> bool
+        val unsafe_value : 'a t -> 'a
+      end
+    end
   end = struct
     type 'a t = 'a
 
@@ -602,6 +609,13 @@ let balance_shallow ~n1 ~k0 ~v0 ~n2 =
     let some v = v
 
     let unsafe_value t = t
+
+    module Optional_syntax = struct
+      module Optional_syntax = struct
+        let is_none = is_none
+        let unsafe_value = unsafe_value
+      end
+    end
   end
 
   (* Avoid allocating a return value at each intermediate node, just
@@ -817,6 +831,79 @@ let balance_shallow ~n1 ~k0 ~v0 ~n2 =
             let r = join ~n1:right ~k0 ~v0 ~n2 in
             Split_return.set_right return r
       end
+
+  let concat_unchecked l r =
+    match l, r with
+    | T (Empty _), _ -> r
+    | _, T (Empty _) -> l
+    | _ ->
+      let return = Extremum_return.create () in
+      if weight l > weight r
+      then begin
+        let l' = split_max' ~return l in
+        let k0 = Extremum_return.key return in
+        let v0 = Extremum_return.value return in
+        join ~n1:l' ~k0 ~v0 ~n2:r
+      end
+      else begin
+        let r' = split_min' ~return r in
+        let k0 = Extremum_return.key return in
+        let v0 = Extremum_return.value return in
+        join ~n1:l ~k0 ~v0 ~n2:r'
+      end
+
+  let rec filter_map ~f t =
+    let erase = Uopt.none in
+    let map = Uopt.some in
+    match t with
+    | T (Empty _) -> empty
+    | T (V1 { k1; v1 }) ->
+      begin match%optional.Uopt f ~erase ~map k1 v1 with
+      | None -> empty
+      | Some v1' ->
+        if phys_same v1 v1'
+        then Obj.magic t
+        else T (V1 { k1; v1 = v1' })
+      end
+    | T (V2 { k11; v11; k1; v1 }) ->
+      begin match%optional.Uopt
+          f ~erase ~map k11 v11, f ~erase ~map k1 v1
+        with
+        | None, None -> empty
+        | Some v11', None -> T (V1 { k1 = k11; v1 = v11' })
+        | None, Some v1' -> T (V1 { k1; v1 = v1' })
+        | Some v11', Some v1' ->
+          if phys_same v11 v11' && phys_same v1 v1'
+          then Obj.magic t
+          else T (V2 { k11; v11 = v11'; k1; v1 = v1' })
+      end
+    | T (V3 { k11; v11; k1; v1; k12; v12 }) ->
+      begin match%optional.Uopt
+          f ~erase ~map k11 v11
+        , f ~erase ~map k1 v1
+        , f ~erase ~map k12 v12
+        with
+        | None, None, None -> empty
+        | Some v11', None, None -> T (V1 { k1 = k11; v1 = v11' })
+        | None, Some v1', None -> T (V1 { k1; v1 = v1' })
+        | None, None, Some v12' -> T (V1 { k1 = k12; v1 = v12' })
+        | Some v11', Some v1', None -> T (V2 { k11; v11 = v11'; k1; v1 = v1' })
+        | Some v11', None, Some v12' -> T (V2 { k11; v11 = v11'; k1 = k12; v1 = v12' })
+        | None, Some v1', Some v12' -> T (V2 { k11 = k1; v11 = v1'; k1 = k12; v1 = v12' })
+        | Some v11', Some v1', Some v12' ->
+          if phys_same v11 v11' && phys_same v1 v1' && phys_same v12 v12'
+          then Obj.magic t
+          else T (V3 { k11; v11 = v11'; k1; v1 = v1'; k12; v12 = v12' })
+      end
+    | T (Node { n1; k0; v0; n2 }) ->
+      let n1' = filter_map ~f n1 in
+      let n2' = filter_map ~f n2 in
+      match%optional.Uopt f ~erase ~map k0 v0 with
+      | None -> concat_unchecked n1' n2'
+      | Some v0' ->
+        if phys_same v0 v0' && phys_same n1 n1' && phys_same n2 n2'
+        then Obj.magic t
+        else join ~n1:n1' ~k0 ~v0:v0' ~n2:n2'
 
 
   module Change = struct
