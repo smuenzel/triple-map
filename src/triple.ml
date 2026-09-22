@@ -584,6 +584,9 @@ let balance_shallow ~n1 ~k0 ~v0 ~n2 =
     val none : 'a t
     val some : 'a -> 'a t
 
+    val is_none : 'a t -> bool
+    val is_some : 'a t -> bool
+
     val unsafe_value : 'a t -> 'a
   end = struct
     type 'a t = 'a
@@ -591,6 +594,10 @@ let balance_shallow ~n1 ~k0 ~v0 ~n2 =
     external __LOC__ : _ t = "%loc_LOC"
 
     let none = __LOC__
+
+    let is_none t = phys_same t none
+
+    let is_some t = not (is_none t)
 
     let some v = v
 
@@ -662,6 +669,155 @@ let balance_shallow ~n1 ~k0 ~v0 ~n2 =
       ~n1:l'
       ~k0:(Extremum_return.key return) ~v0:(Extremum_return.value return)
       ~n2:r
+
+  module Split_return = struct
+    type 'a t =
+      { mutable left : 'a T.t Uopt.t
+      ; mutable key : K.t Uopt.t
+      ; mutable value : 'a Uopt.t
+      ; mutable right : 'a T.t Uopt.t
+      }
+
+    let create () = { key = Uopt.none
+                    ; value = Uopt.none
+                    ; left = Uopt.none
+                    ; right = Uopt.none
+                    }
+
+    let left t = Uopt.unsafe_value t.left
+    let key t = Uopt.unsafe_value t.key
+    let value t = Uopt.unsafe_value t.value
+    let right t = Uopt.unsafe_value t.right
+
+    let set t l k v r =
+      t.left <- Uopt.some l;
+      t.key <- Uopt.some k;
+      t.value <- Uopt.some v;
+      t.right <- Uopt.some r
+
+    let set_no_center t l r =
+      t.left <- Uopt.some l;
+      t.key <- Uopt.none;
+      t.value <- Uopt.none;
+      t.right <- Uopt.some r
+
+    let set_left t l =
+      t.left <- Uopt.some l
+
+    let set_right t r =
+      t.right <- Uopt.some r
+  end
+
+  let rec join ~n1 ~k0 ~v0 ~n2 =
+    let n1w = weight n1
+    and n2w = weight n2
+    in
+    if valid_input_imbalance n1w n2w
+    then balance_shallow ~n1 ~k0 ~v0 ~n2
+    else begin
+      if n1w > n2w
+      then begin
+        match n1 with
+        | T (Node { weight = _; n1 = n11; k0 = k1; v0 = v1; n2 = n12 }) ->
+          balance_shallow ~n1:n11 ~k0:k1 ~v0:v1
+            ~n2:(join_right ~n1:n12 ~k0 ~v0 ~n2 ~n2w)
+        | T (V3 _) -> balance_shallow ~n1 ~k0 ~v0 ~n2
+        | _ ->
+          (* Heavy side on invalid balance has to be Node/V3, see proof *)
+          assert false
+      end
+      else begin
+        match n2 with
+        | T (Node { weight = _; n1 = n21; k0 = k2; v0 = v2; n2 = n22 }) ->
+          balance_shallow
+            ~n1:(join_left ~n1 ~n1w ~k0 ~v0 ~n2:n21)
+            ~k0:k2 ~v0:v2
+            ~n2:(n22)
+        | T (V3 _) -> balance_shallow ~n1 ~k0 ~v0 ~n2
+        | _ -> assert false
+      end
+    end
+  and join_right ~n1 ~k0 ~v0 ~n2 ~n2w =
+    let n1w = weight n1 in
+    if valid_input_imbalance n1w n2w
+    then balance_shallow ~n1 ~k0 ~v0 ~n2
+    else match n1 with
+      | T (Node { weight = _; n1 = n11; k0 = k1; v0 = v1; n2 = n12 }) ->
+          balance_shallow ~n1:n11 ~k0:k1 ~v0:v1
+            ~n2:(join_right ~n1:n12 ~k0 ~v0 ~n2 ~n2w)
+      | T (V3 _) -> balance_shallow ~n1 ~k0 ~v0 ~n2
+      | _ ->  assert false
+  and join_left ~n1 ~n1w ~k0 ~v0 ~n2 =
+    let n2w = weight n2 in
+    if valid_input_imbalance n1w n2w
+    then balance_shallow ~n1 ~k0 ~v0 ~n2
+    else match n2 with
+      | T (Node { weight = _; n1 = n21; k0 = k2; v0 = v2; n2 = n22 }) ->
+        balance_shallow
+          ~n1:(join_left ~n1 ~n1w ~k0 ~v0 ~n2:n21)
+          ~k0:k2 ~v0:v2
+          ~n2:(n22)
+      | T (V3 _) -> balance_shallow ~n1 ~k0 ~v0 ~n2
+      | _ -> assert false
+
+
+  let rec split ~return t k =
+    match t with 
+    | T (Empty _) -> Split_return.set_no_center return empty empty
+    | T (V1 { k1; v1 }) ->
+      begin match%compare K.compare k k1 with
+        | Eq -> Split_return.set return empty k1 v1 empty
+        | Lt -> Split_return.set_no_center return t empty
+        | Gt -> Split_return.set_no_center return empty t
+      end
+    | T (V2 { k11; v11; k1; v1 }) ->
+      begin match%compare K.compare k k1 with
+        | Eq -> Split_return.set return (T (V1 { k1 = k11; v1 = v11 })) k1 v1 empty
+        | Gt -> Split_return.set_no_center return t empty
+        | Lt ->
+          begin match%compare K.compare k k11 with
+            | Eq -> Split_return.set return empty k11 v11 (T (V1 { k1; v1 }))
+            | Gt -> Split_return.set_no_center return (T (V1 { k1 = k11; v1 = v11 })) (T (V1 { k1; v1 }))
+            | Lt -> Split_return.set_no_center return empty t
+          end
+      end
+    | T (V3 { k11; v11; k1; v1; k12; v12 }) ->
+      begin match%compare K.compare k k1 with
+        | Eq -> Split_return.set return (T (V1 { k1 = k11; v1 = v11 })) k1 v1 (T (V1 { k1 = k12; v1 = v12 }))
+        | Gt ->
+          begin match%compare K.compare k k12 with
+            | Eq -> Split_return.set return (T (V2 { k11; v11; k1; v1 })) k12 v12 empty
+            | Gt -> Split_return.set_no_center return t empty
+            | Lt -> Split_return.set_no_center return (T (V2 { k11; v11; k1; v1 })) (T (V1 { k1 = k12; v1 = v12 }))
+          end
+        | Lt ->
+          begin match%compare K.compare k k11 with
+            | Eq -> Split_return.set return empty k11 v11 (T (V2 { k11 = k1; v11 = v1; k1 = k12; v1 = v12 }))
+            | Gt -> Split_return.set_no_center return (T (V1 { k1 = k11; v1 = v11 })) (T (V2 { k11 = k1; v11 = v1; k1 = k12; v1 = v12 }))
+            | Lt -> Split_return.set_no_center return empty t
+          end
+      end
+    | T (Node { n1; k0; v0; n2 }) ->
+      begin match%compare K.compare k k0 with
+        | Eq -> Split_return.set return n1 k0 v0 n2
+        | Gt ->
+          split ~return n2 k;
+          let left = Split_return.left return in
+          if phys_same left n1
+          then Split_return.set_left return t
+          else
+            let l = join ~n1 ~k0 ~v0 ~n2:left in
+            Split_return.set_left return l
+        | Lt ->
+          split ~return n1 k;
+          let right = Split_return.right return in
+          if phys_same right n2
+          then Split_return.set_right return t
+          else
+            let r = join ~n1:right ~k0 ~v0 ~n2 in
+            Split_return.set_right return r
+      end
+
 
   module Change = struct
     let [@inline hint] unchanged t = T t
@@ -1180,58 +1336,6 @@ let balance_shallow ~n1 ~k0 ~v0 ~n2 =
       T (V3 { k11; v11 = f k11 v11 user; k1; v1 = f k1 v1 user; k12; v12 = f k12 v12 user })
     | Node { weight; n1; k0; v0; n2 } ->
       T (Node { weight; n1 = map ~f ~user n1; k0; v0 = f k0 v0 user; n2 = map ~f ~user n2 })
-
-  let rec join ~n1 ~k0 ~v0 ~n2 =
-    let n1w = weight n1
-    and n2w = weight n2
-    in
-    if valid_input_imbalance n1w n2w
-    then balance_shallow ~n1 ~k0 ~v0 ~n2
-    else begin
-      if n1w > n2w
-      then begin
-        match n1 with
-        | T (Node { weight = _; n1 = n11; k0 = k1; v0 = v1; n2 = n12 }) ->
-          balance_shallow ~n1:n11 ~k0:k1 ~v0:v1
-            ~n2:(join_right ~n1:n12 ~k0 ~v0 ~n2 ~n2w)
-        | T (V3 _) -> balance_shallow ~n1 ~k0 ~v0 ~n2
-        | _ ->
-          (* Heavy side on invalid balance has to be Node/V3, see proof *)
-          assert false
-      end
-      else begin
-        match n2 with
-        | T (Node { weight = _; n1 = n21; k0 = k2; v0 = v2; n2 = n22 }) ->
-          balance_shallow
-            ~n1:(join_left ~n1 ~n1w ~k0 ~v0 ~n2:n21)
-            ~k0:k2 ~v0:v2
-            ~n2:(n22)
-        | T (V3 _) -> balance_shallow ~n1 ~k0 ~v0 ~n2
-        | _ -> assert false
-      end
-    end
-  and join_right ~n1 ~k0 ~v0 ~n2 ~n2w =
-    let n1w = weight n1 in
-    if valid_input_imbalance n1w n2w
-    then balance_shallow ~n1 ~k0 ~v0 ~n2
-    else match n1 with
-      | T (Node { weight = _; n1 = n11; k0 = k1; v0 = v1; n2 = n12 }) ->
-          balance_shallow ~n1:n11 ~k0:k1 ~v0:v1
-            ~n2:(join_right ~n1:n12 ~k0 ~v0 ~n2 ~n2w)
-      | T (V3 _) -> balance_shallow ~n1 ~k0 ~v0 ~n2
-      | _ ->  assert false
-  and join_left ~n1 ~n1w ~k0 ~v0 ~n2 =
-    let n2w = weight n2 in
-    if valid_input_imbalance n1w n2w
-    then balance_shallow ~n1 ~k0 ~v0 ~n2
-    else match n2 with
-      | T (Node { weight = _; n1 = n21; k0 = k2; v0 = v2; n2 = n22 }) ->
-        balance_shallow
-          ~n1:(join_left ~n1 ~n1w ~k0 ~v0 ~n2:n21)
-          ~k0:k2 ~v0:v2
-          ~n2:(n22)
-      | T (V3 _) -> balance_shallow ~n1 ~k0 ~v0 ~n2
-      | _ -> assert false
 
   let rec to_seq = function
     | T (Node { weight = _; n1; k0; v0; n2; }) ->
@@ -2321,7 +2425,7 @@ module [@inline always] Stdlib_make(O : Map.OrderedType)
 
   let to_seq_from = M.to_seq_from
 
-  let add_seq s t = Seq.fold_left (fun acc (k, v) -> M.insert_or_replace acc k v)  empty s
+  let add_seq s t = Seq.fold_left (fun acc (k, v) -> M.insert_or_replace acc k v) t s
 
   let of_seq s = add_seq s empty
 end
