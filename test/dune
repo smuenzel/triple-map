@@ -1,0 +1,6 @@
+(library
+  (name triple_map_test)
+  (libraries triple_map)
+  (inline_tests)
+  (preprocess (pps ppx_jane))
+)
