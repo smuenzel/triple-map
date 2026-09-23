@@ -587,6 +587,8 @@ let balance_shallow ~n1 ~k0 ~v0 ~n2 =
     val is_none : 'a t -> bool
     val is_some : 'a t -> bool
 
+    val to_option : 'a t -> 'a option
+
     val unsafe_value : 'a t -> 'a
 
     module Optional_syntax : sig
@@ -609,6 +611,8 @@ let balance_shallow ~n1 ~k0 ~v0 ~n2 =
     let some v = v
 
     let unsafe_value t = t
+
+    let to_option t = if is_none t then None else Some (unsafe_value t)
 
     module Optional_syntax = struct
       module Optional_syntax = struct
@@ -915,7 +919,7 @@ let balance_shallow ~n1 ~k0 ~v0 ~n2 =
     val present_2 : ('a1, 'a2) user_param -> k:K.t -> v:'a2 -> erase:'cout -> map:(('a1, 'a2) res -> 'cout) -> 'cout
   end
 
-  module Merge(Merger : Merger) = struct
+  module [@inline always] Merge(Merger : Merger) = struct
 
     let erase = Uopt.none
     let map = Uopt.some
@@ -934,9 +938,9 @@ let balance_shallow ~n1 ~k0 ~v0 ~n2 =
           | T (V2 { k11; v11; k1; v1 }) ->
             merge_left ~er ~srl ~srr user ~l1:empty ~k:k11 ~v:v11 ~r1:(T (V1 { k1; v1 })) ~t2
           | T (V3 { k11; v11; k1; v1; k12; v12 }) ->
-            let r1 = T (V1 { k1 = k11; v1 = v11 }) in
-            let l1 = T (V1 { k1 = k12; v1 = v12 }) in
-            merge_left ~er ~srl ~srr user ~l1 ~k:k11 ~v:v11 ~r1 ~t2
+            let l1 = T (V1 { k1 = k11; v1 = v11 }) in
+            let r1 = T (V1 { k1 = k12; v1 = v12 }) in
+            merge_left ~er ~srl ~srr user ~l1 ~k:k1 ~v:v1 ~r1 ~t2
           | T (Node { n1; k0; v0; n2 }) ->
             merge_left ~er ~srl ~srr user ~l1:n1 ~k:k0 ~v:v0 ~r1:n2 ~t2
           | _ -> assert false
@@ -949,7 +953,7 @@ let balance_shallow ~n1 ~k0 ~v0 ~n2 =
           | T (V3 { k11; v11; k1; v1; k12; v12 }) ->
             let l2 = T (V1 { k1 = k11; v1 = v11 }) in
             let r2 = T (V1 { k1 = k12; v1 = v12 }) in
-            merge_right ~er ~srl ~srr user ~t1 ~l2 ~k:k11 ~v:v11 ~r2
+            merge_right ~er ~srl ~srr user ~t1 ~l2 ~k:k1 ~v:v1 ~r2
           | T (Node { n1; k0; v0; n2 }) ->
             merge_right ~er ~srl ~srr user ~t1 ~l2:n1 ~k:k0 ~v:v0 ~r2:n2
           | _ -> assert false
@@ -2478,14 +2482,34 @@ module [@inline always] Stdlib_make(O : Map.OrderedType)
   let mapi f t =
     M.map ~f:(fun k v f -> f k v) ~user:f t
 
-  let filter _ = assert false
+  let filter f t =
+    let return = M.Extremum_return.create () in
+    (* CR smuenzel: maybe better if [Filter_map] were a functor? *)
+    (M.filter_map [@inlined always]) ~return
+      ~f:(fun () ~k ~v ~erase ~map ->
+          match f k v with
+          | false -> erase
+          | true -> map v)
+      () t
 
-  let filter_map _ = assert false
+  let filter_map f t =
+    let return = M.Extremum_return.create () in
+    (M.filter_map [@inlined always]) ~return
+      ~f:(fun () ~k ~v ~erase ~map ->
+          match f k v with
+          | None -> erase
+          | Some v' -> map v')
+      () t
 
   let partition _ = assert false
 
-  let split _ = assert false
-
+  let split k t =
+    let return = M.Split_return.create () in
+    M.split ~return t k;
+    M.Split_return.left return
+  , M.Uopt.to_option (M.Split_return.value_opt return)
+  , M.Split_return.right return
+      
   let is_empty = function
     | M.T (Empty _) -> true
     | _ -> false
