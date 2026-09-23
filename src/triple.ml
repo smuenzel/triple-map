@@ -921,7 +921,14 @@ let balance_shallow ~n1 ~k0 ~v0 ~n2 =
     val present_2 : ('a1, 'a2, 'r) user_param -> k:K.t -> v:'a2 -> erase:'cout -> map:(('a1, 'a2, 'r) res -> 'cout) -> 'cout
   end
 
-  module [@inline always] Merge(Merger : Merger) = struct
+  module type Merger_base = sig
+    include Merger
+
+    val remainder_1 : ('a1, 'a2, 'r) user_param -> return:('a1, 'a2, 'r) res Extremum_return.t -> 'a1 t -> ('a1, 'a2, 'r) res t
+    val remainder_2 : ('a1, 'a2, 'r) user_param -> return:('a1, 'a2, 'r) res Extremum_return.t -> 'a2 t -> ('a1, 'a2, 'r) res t
+  end
+
+  module [@inline always] Merge_base(Merger : Merger_base) = struct
 
     let erase = Uopt.none
     let map = Uopt.some
@@ -929,8 +936,10 @@ let balance_shallow ~n1 ~k0 ~v0 ~n2 =
     let rec merge ~er ~srl ~srr user t1 t2 =
       match t1, t2 with
       | T (Empty _), T (Empty _) -> empty
-      | T (Empty _), _ -> filter_map ~return:er ~f:Merger.present_2 user t2
-      | _, T (Empty _) -> filter_map ~return:er ~f:Merger.present_1 user t1
+      | T (Empty _), _ -> 
+        Merger.remainder_2 user ~return:er t2
+      | _, T (Empty _) ->
+        Merger.remainder_1 user ~return:er t1
       | _ ->
         if weight t1 > weight t2
         then begin
@@ -989,6 +998,17 @@ let balance_shallow ~n1 ~k0 ~v0 ~n2 =
       | None -> concat_unchecked ~return:er l r
       | Some v -> join ~n1:l ~k0:k ~v0:v ~n2:r
   end
+
+  module [@inline always] Merge(Merger : Merger) =
+    Merge_base(struct
+      include Merger
+
+      let remainder_1 user ~return t1 =
+        filter_map ~return ~f:Merger.present_1 user t1
+
+      let remainder_2 user ~return t2 =
+        filter_map ~return ~f:Merger.present_2 user t2
+    end)
 
   module Change = struct
     let [@inline hint] unchanged t = T t
@@ -2424,10 +2444,19 @@ module [@inline always] Stdlib_make(O : Map.OrderedType)
           (type a b r) (F f : (a, b, r) user_param)
           ~k ~(v : b) ~erase ~(map : r -> _)
         = map v
+
+      let remainder_1
+          (type a b r) (F f : (a, b, r) user_param)
+          ~return (t : a M.t) : r t =
+        t
+
+      let remainder_2
+          (type a b r) (F f : (a, b, r) user_param)
+          ~return (t : b M.t) : r t=
+        t
     end
 
-  (* CR smuenzel: With a dedicated Union module, this could be faster. *)
-  module Union = M.Merge(Union_arg)
+  module Union = M.Merge_base(Union_arg)
 
   let union f t1 t2 =
     let er = M.Extremum_return.create () in
