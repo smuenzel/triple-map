@@ -696,29 +696,19 @@ let [@inline always] balance_shallow ~n1 ~k0 ~v0 ~n2 =
   module Split_return = struct
     type 'a t =
       { mutable left : 'a T.t Uopt.t
-      ; mutable value : 'a Uopt.t
       ; mutable right : 'a T.t Uopt.t
       }
 
     let create () =
-      { value = Uopt.none
-      ; left = Uopt.none
+      { left = Uopt.none
       ; right = Uopt.none
       }
 
     let left t = Uopt.unsafe_value t.left
-    let value t = Uopt.unsafe_value t.value
-    let value_opt t = t.value
     let right t = Uopt.unsafe_value t.right
 
-    let set t l v r =
+    let set t l r =
       t.left <- Uopt.some l;
-      t.value <- Uopt.some v;
-      t.right <- Uopt.some r
-
-    let set_no_center t l r =
-      t.left <- Uopt.some l;
-      t.value <- Uopt.none;
       t.right <- Uopt.some r
 
     let set_left t l =
@@ -783,59 +773,65 @@ let [@inline always] balance_shallow ~n1 ~k0 ~v0 ~n2 =
 
   let rec split ~return t k =
     match t with 
-    | T (Empty _) -> Split_return.set_no_center return empty empty
+    | T (Empty _) ->
+      Split_return.set return empty empty;
+      Uopt.none
     | T (V1 { k1; v1 }) ->
       begin match%compare K.compare k k1 with
-        | Eq -> Split_return.set return empty v1 empty
-        | Gt -> Split_return.set_no_center return t empty
-        | Lt -> Split_return.set_no_center return empty t
+        | Eq -> Split_return.set return empty empty; Uopt.some v1
+        | Gt -> Split_return.set  return t empty; Uopt.none
+        | Lt -> Split_return.set return empty t; Uopt.none
       end
     | T (V2 { k11; v11; k1; v1 }) ->
       begin match%compare K.compare k k1 with
-        | Eq -> Split_return.set return (T (V1 { k1 = k11; v1 = v11 })) v1 empty
-        | Gt -> Split_return.set_no_center return t empty
+        | Eq -> Split_return.set return (T (V1 { k1 = k11; v1 = v11 })) empty; Uopt.some v1
+        | Gt -> Split_return.set return t empty; Uopt.none
         | Lt ->
           begin match%compare K.compare k k11 with
-            | Eq -> Split_return.set return empty v11 (T (V1 { k1; v1 }))
-            | Gt -> Split_return.set_no_center return (T (V1 { k1 = k11; v1 = v11 })) (T (V1 { k1; v1 }))
-            | Lt -> Split_return.set_no_center return empty t
+            | Eq -> Split_return.set return empty (T (V1 { k1; v1 })); Uopt.some v11
+            | Gt -> Split_return.set return (T (V1 { k1 = k11; v1 = v11 })) (T (V1 { k1; v1 })); Uopt.none
+            | Lt -> Split_return.set return empty t; Uopt.none
           end
       end
     | T (V3 { k11; v11; k1; v1; k12; v12 }) ->
       begin match%compare K.compare k k1 with
-        | Eq -> Split_return.set return (T (V1 { k1 = k11; v1 = v11 })) v1 (T (V1 { k1 = k12; v1 = v12 }))
+        | Eq -> Split_return.set return (T (V1 { k1 = k11; v1 = v11 })) (T (V1 { k1 = k12; v1 = v12 })); Uopt.some v1
         | Gt ->
           begin match%compare K.compare k k12 with
-            | Eq -> Split_return.set return (T (V2 { k11; v11; k1; v1 })) v12 empty
-            | Gt -> Split_return.set_no_center return t empty
-            | Lt -> Split_return.set_no_center return (T (V2 { k11; v11; k1; v1 })) (T (V1 { k1 = k12; v1 = v12 }))
+            | Eq -> Split_return.set return (T (V2 { k11; v11; k1; v1 })) empty; Uopt.some v12
+            | Gt -> Split_return.set return t empty; Uopt.none
+            | Lt -> Split_return.set return (T (V2 { k11; v11; k1; v1 })) (T (V1 { k1 = k12; v1 = v12 })); Uopt.none
           end
         | Lt ->
           begin match%compare K.compare k k11 with
-            | Eq -> Split_return.set return empty v11 (T (V2 { k11 = k1; v11 = v1; k1 = k12; v1 = v12 }))
-            | Gt -> Split_return.set_no_center return (T (V1 { k1 = k11; v1 = v11 })) (T (V2 { k11 = k1; v11 = v1; k1 = k12; v1 = v12 }))
-            | Lt -> Split_return.set_no_center return empty t
+            | Eq -> Split_return.set return empty (T (V2 { k11 = k1; v11 = v1; k1 = k12; v1 = v12 })); Uopt.some v11
+            | Gt -> Split_return.set return (T (V1 { k1 = k11; v1 = v11 })) (T (V2 { k11 = k1; v11 = v1; k1 = k12; v1 = v12 })); Uopt.none
+            | Lt -> Split_return.set return empty t; Uopt.none
           end
       end
     | T (Node { n1; k0; v0; n2 }) ->
       begin match%compare K.compare k k0 with
-        | Eq -> Split_return.set return n1 v0 n2
+        | Eq -> Split_return.set return n1 n2; Uopt.some v0
         | Gt ->
-          split ~return n2 k;
+          let ret = split ~return n2 k in
           let left = Split_return.left return in
-          if phys_same left n2
-          then Split_return.set_left return t
-          else
-            let l = join ~n1 ~k0 ~v0 ~n2:left in
-            Split_return.set_left return l
+          begin if phys_same left n2
+            then Split_return.set_left return t
+            else
+              let l = join ~n1 ~k0 ~v0 ~n2:left in
+              Split_return.set_left return l
+          end;
+          ret
         | Lt ->
-          split ~return n1 k;
+          let ret = split ~return n1 k in
           let right = Split_return.right return in
-          if phys_same right n1
-          then Split_return.set_right return t
-          else
-            let r = join ~n1:right ~k0 ~v0 ~n2 in
-            Split_return.set_right return r
+          begin if phys_same right n1
+            then Split_return.set_right return t
+            else
+              let r = join ~n1:right ~k0 ~v0 ~n2 in
+              Split_return.set_right return r
+          end;
+          ret
       end
 
   let concat_unchecked ~return l r =
@@ -968,10 +964,9 @@ let [@inline always] balance_shallow ~n1 ~k0 ~v0 ~n2 =
           | _ -> assert false
         end
     and merge_left ~er ~srl ~srr user ~l1 ~k ~v ~r1 ~t2 =
-      split ~return:srl t2 k;
+      let sv = split ~return:srl t2 k in
       let l2 = Split_return.left srl in
       let r2 = Split_return.right srl in
-      let sv = Split_return.value_opt srl in
       let l = merge ~er ~srl ~srr user l1 l2 in
       let r = merge ~er ~srl ~srr user r1 r2 in
       match%optional.Uopt
@@ -982,10 +977,9 @@ let [@inline always] balance_shallow ~n1 ~k0 ~v0 ~n2 =
       | None -> concat_unchecked ~return:er l r
       | Some v -> join ~n1:l ~k0:k ~v0:v ~n2:r
     and merge_right ~er ~srl ~srr user ~t1 ~l2 ~k ~v ~r2 =
-      split ~return:srr t1 k;
+      let sv = split ~return:srr t1 k in
       let l1 = Split_return.left srr in
       let r1 = Split_return.right srr in
-      let sv = Split_return.value_opt srr in
       let l = merge ~er ~srl ~srr user l1 l2 in
       let r = merge ~er ~srl ~srr user r1 r2 in
       match%optional.Uopt
@@ -2596,9 +2590,9 @@ module [@inline always] Stdlib_make(O : Map.OrderedType)
 
   let split k t =
     let return = M.Split_return.create () in
-    M.split ~return t k;
+    let ret = M.split ~return t k in
     M.Split_return.left return
-  , M.Uopt.to_option (M.Split_return.value_opt return)
+  , M.Uopt.to_option ret
   , M.Split_return.right return
       
   let is_empty = function
