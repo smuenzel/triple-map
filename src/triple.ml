@@ -696,33 +696,28 @@ let [@inline always] balance_shallow ~n1 ~k0 ~v0 ~n2 =
   module Split_return = struct
     type 'a t =
       { mutable left : 'a T.t Uopt.t
-      ; mutable key : K.t Uopt.t
       ; mutable value : 'a Uopt.t
       ; mutable right : 'a T.t Uopt.t
       }
 
     let create () =
-      { key = Uopt.none
-      ; value = Uopt.none
+      { value = Uopt.none
       ; left = Uopt.none
       ; right = Uopt.none
       }
 
     let left t = Uopt.unsafe_value t.left
-    let key t = Uopt.unsafe_value t.key
     let value t = Uopt.unsafe_value t.value
     let value_opt t = t.value
     let right t = Uopt.unsafe_value t.right
 
-    let set t l k v r =
+    let set t l v r =
       t.left <- Uopt.some l;
-      t.key <- Uopt.some k;
       t.value <- Uopt.some v;
       t.right <- Uopt.some r
 
     let set_no_center t l r =
       t.left <- Uopt.some l;
-      t.key <- Uopt.none;
       t.value <- Uopt.none;
       t.right <- Uopt.some r
 
@@ -791,40 +786,40 @@ let [@inline always] balance_shallow ~n1 ~k0 ~v0 ~n2 =
     | T (Empty _) -> Split_return.set_no_center return empty empty
     | T (V1 { k1; v1 }) ->
       begin match%compare K.compare k k1 with
-        | Eq -> Split_return.set return empty k1 v1 empty
+        | Eq -> Split_return.set return empty v1 empty
         | Gt -> Split_return.set_no_center return t empty
         | Lt -> Split_return.set_no_center return empty t
       end
     | T (V2 { k11; v11; k1; v1 }) ->
       begin match%compare K.compare k k1 with
-        | Eq -> Split_return.set return (T (V1 { k1 = k11; v1 = v11 })) k1 v1 empty
+        | Eq -> Split_return.set return (T (V1 { k1 = k11; v1 = v11 })) v1 empty
         | Gt -> Split_return.set_no_center return t empty
         | Lt ->
           begin match%compare K.compare k k11 with
-            | Eq -> Split_return.set return empty k11 v11 (T (V1 { k1; v1 }))
+            | Eq -> Split_return.set return empty v11 (T (V1 { k1; v1 }))
             | Gt -> Split_return.set_no_center return (T (V1 { k1 = k11; v1 = v11 })) (T (V1 { k1; v1 }))
             | Lt -> Split_return.set_no_center return empty t
           end
       end
     | T (V3 { k11; v11; k1; v1; k12; v12 }) ->
       begin match%compare K.compare k k1 with
-        | Eq -> Split_return.set return (T (V1 { k1 = k11; v1 = v11 })) k1 v1 (T (V1 { k1 = k12; v1 = v12 }))
+        | Eq -> Split_return.set return (T (V1 { k1 = k11; v1 = v11 })) v1 (T (V1 { k1 = k12; v1 = v12 }))
         | Gt ->
           begin match%compare K.compare k k12 with
-            | Eq -> Split_return.set return (T (V2 { k11; v11; k1; v1 })) k12 v12 empty
+            | Eq -> Split_return.set return (T (V2 { k11; v11; k1; v1 })) v12 empty
             | Gt -> Split_return.set_no_center return t empty
             | Lt -> Split_return.set_no_center return (T (V2 { k11; v11; k1; v1 })) (T (V1 { k1 = k12; v1 = v12 }))
           end
         | Lt ->
           begin match%compare K.compare k k11 with
-            | Eq -> Split_return.set return empty k11 v11 (T (V2 { k11 = k1; v11 = v1; k1 = k12; v1 = v12 }))
+            | Eq -> Split_return.set return empty v11 (T (V2 { k11 = k1; v11 = v1; k1 = k12; v1 = v12 }))
             | Gt -> Split_return.set_no_center return (T (V1 { k1 = k11; v1 = v11 })) (T (V2 { k11 = k1; v11 = v1; k1 = k12; v1 = v12 }))
             | Lt -> Split_return.set_no_center return empty t
           end
       end
     | T (Node { n1; k0; v0; n2 }) ->
       begin match%compare K.compare k k0 with
-        | Eq -> Split_return.set return n1 k0 v0 n2
+        | Eq -> Split_return.set return n1 v0 n2
         | Gt ->
           split ~return n2 k;
           let left = Split_return.left return in
