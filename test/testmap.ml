@@ -270,9 +270,9 @@ end
 let%expect_test "stdlib" =
   let module M = Map.Make(struct type t = int let compare (x:t) y = compare x y end) in
   let module _ = Make(M) in
-  [%expect {| x |}]
+  [%expect {| |}]
 
 let%expect_test "stdlib" =
   let module M = Triple_map.Ispecial in
   let module _ = Make(M) in
-  [%expect {| x |}]
+  [%expect {| |}]

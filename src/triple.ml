@@ -2532,7 +2532,14 @@ module [@inline always] Stdlib_make(O : Map.OrderedType)
           | Some v' -> map v')
       f t
 
-  let partition _ = assert false
+  (* CR smuenzel: inefficient *)
+  let partition f t =
+    M.fold_low ~init:(empty, empty)
+      ~user:f
+      ~f:(fun (m_t, m_f) f k v ->
+          if f k v
+          then M.insert_or_replace m_t k v, m_f
+          else m_t, M.insert_or_replace m_f k v) t
 
   let split k t =
     let return = M.Split_return.create () in
