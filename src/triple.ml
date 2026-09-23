@@ -692,11 +692,12 @@ let balance_shallow ~n1 ~k0 ~v0 ~n2 =
       ; mutable right : 'a T.t Uopt.t
       }
 
-    let create () = { key = Uopt.none
-                    ; value = Uopt.none
-                    ; left = Uopt.none
-                    ; right = Uopt.none
-                    }
+    let create () =
+      { key = Uopt.none
+      ; value = Uopt.none
+      ; left = Uopt.none
+      ; right = Uopt.none
+      }
 
     let left t = Uopt.unsafe_value t.left
     let key t = Uopt.unsafe_value t.key
@@ -782,8 +783,8 @@ let balance_shallow ~n1 ~k0 ~v0 ~n2 =
     | T (V1 { k1; v1 }) ->
       begin match%compare K.compare k k1 with
         | Eq -> Split_return.set return empty k1 v1 empty
-        | Lt -> Split_return.set_no_center return t empty
-        | Gt -> Split_return.set_no_center return empty t
+        | Gt -> Split_return.set_no_center return t empty
+        | Lt -> Split_return.set_no_center return empty t
       end
     | T (V2 { k11; v11; k1; v1 }) ->
       begin match%compare K.compare k k1 with
@@ -920,7 +921,7 @@ let balance_shallow ~n1 ~k0 ~v0 ~n2 =
     let erase = Uopt.none
     let map = Uopt.some
 
-    let rec merge ~split_return user t1 t2 =
+    let rec merge ~srl ~srr user t1 t2 =
       match t1, t2 with
       | T (Empty _), T (Empty _) -> empty
       | T (Empty _), _ -> filter_map ~f:Merger.present_2 user t2
@@ -929,26 +930,32 @@ let balance_shallow ~n1 ~k0 ~v0 ~n2 =
         if weight t1 > weight t2
         then begin
           match t1 with
-          | T (V1 { k1; v1 }) -> merge_left ~split_return user ~l1:t1 ~k:k1 ~v:v1 ~r1:empty ~t2
-          | T (V2 { k11; v11; k1; v1 }) -> merge_left ~split_return user ~l1:t1 ~k:k11 ~v:v11 ~r1:(T (V1 { k1; v1 })) ~t2
-          | T (V3 { k11; v11; k1; v1; k12; v12 }) -> merge_left ~split_return user ~l1:t1 ~k:k11 ~v:v11 ~r1:(T (V2 { k11 = k1; v11 = v1; k1 = k12; v1 = v12 })) ~t2
-          | T (Node { n1; k0; v0; n2 }) -> merge_left ~split_return user ~l1:n1 ~k:k0 ~v:v0 ~r1:n2 ~t2
+          | T (V1 { k1; v1 }) -> merge_left ~srl ~srr user ~l1:empty ~k:k1 ~v:v1 ~r1:empty ~t2
+          | T (V2 { k11; v11; k1; v1 }) -> merge_left ~srl ~srr user ~l1:empty ~k:k11 ~v:v11 ~r1:(T (V1 { k1; v1 })) ~t2
+          | T (V3 { k11; v11; k1; v1; k12; v12 }) ->
+            let r1 = T (V1 { k1 = k11; v1 = v11 }) in
+            let l1 = T (V1 { k1 = k12; v1 = v12 }) in
+            merge_left ~srl ~srr user ~l1 ~k:k11 ~v:v11 ~r1 ~t2
+          | T (Node { n1; k0; v0; n2 }) -> merge_left ~srl ~srr user ~l1:n1 ~k:k0 ~v:v0 ~r1:n2 ~t2
           | _ -> assert false
         end else begin
           match t2 with
-          | T (V1 { k1; v1 }) -> merge_right ~split_return user ~t1 ~l2:t2 ~k:k1 ~v:v1 ~r2:empty
-          | T (V2 { k11; v11; k1; v1 }) -> merge_right ~split_return user ~t1 ~l2:t2 ~k:k11 ~v:v11 ~r2:(T (V1 { k1; v1 }))
-          | T (V3 { k11; v11; k1; v1; k12; v12 }) -> merge_right ~split_return user ~t1 ~l2:t2 ~k:k11 ~v:v11 ~r2:(T (V2 { k11 = k1; v11 = v1; k1 = k12; v1 = v12 }))
-          | T (Node { n1; k0; v0; n2 }) -> merge_right ~split_return user ~t1 ~l2:n1 ~k:k0 ~v:v0 ~r2:n2
+          | T (V1 { k1; v1 }) -> merge_right ~srl ~srr user ~t1 ~l2:empty ~k:k1 ~v:v1 ~r2:empty
+          | T (V2 { k11; v11; k1; v1 }) -> merge_right ~srl ~srr user ~t1 ~l2:empty ~k:k11 ~v:v11 ~r2:(T (V1 { k1; v1 }))
+          | T (V3 { k11; v11; k1; v1; k12; v12 }) ->
+            let l2 = T (V1 { k1 = k11; v1 = v11 }) in
+            let r2 = T (V1 { k1 = k12; v1 = v12 }) in
+            merge_right ~srl ~srr user ~t1 ~l2 ~k:k11 ~v:v11 ~r2
+          | T (Node { n1; k0; v0; n2 }) -> merge_right ~srl ~srr user ~t1 ~l2:n1 ~k:k0 ~v:v0 ~r2:n2
           | _ -> assert false
         end
-    and merge_left ~split_return user ~l1 ~k ~v ~r1 ~t2 =
-      split ~return:split_return t2 k;
-      let l2 = Split_return.left split_return in
-      let r2 = Split_return.right split_return in
-      let sv = Split_return.value_opt split_return in
-      let l = merge ~split_return user l1 l2 in
-      let r = merge ~split_return user r1 r2 in
+    and merge_left ~srl ~srr user ~l1 ~k ~v ~r1 ~t2 =
+      split ~return:srl t2 k;
+      let l2 = Split_return.left srl in
+      let r2 = Split_return.right srl in
+      let sv = Split_return.value_opt srl in
+      let l = merge ~srl ~srr user l1 l2 in
+      let r = merge ~srl ~srr user r1 r2 in
       match%optional.Uopt
         match%optional.Uopt sv with
         | None -> Merger.present_1 user ~k ~v ~erase ~map
@@ -956,13 +963,13 @@ let balance_shallow ~n1 ~k0 ~v0 ~n2 =
       with
       | None -> concat_unchecked l r
       | Some v -> join ~n1:l ~k0:k ~v0:v ~n2:r
-    and merge_right ~split_return user ~t1 ~l2 ~k ~v ~r2 =
-      split ~return:split_return t1 k;
-      let l1 = Split_return.left split_return in
-      let r1 = Split_return.right split_return in
-      let sv = Split_return.value_opt split_return in
-      let l = merge ~split_return user l1 l2 in
-      let r = merge ~split_return user r1 r2 in
+    and merge_right ~srl ~srr user ~t1 ~l2 ~k ~v ~r2 =
+      split ~return:srr t1 k;
+      let l1 = Split_return.left srr in
+      let r1 = Split_return.right srr in
+      let sv = Split_return.value_opt srr in
+      let l = merge ~srl ~srr user l1 l2 in
+      let r = merge ~srl ~srr user r1 r2 in
       match%optional.Uopt
         match%optional.Uopt sv with
         | None -> Merger.present_2 user ~k ~v ~erase ~map
