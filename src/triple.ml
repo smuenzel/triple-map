@@ -347,7 +347,10 @@ module [@inline always] Make(K : StandardOrdered) = struct
 
   let [@inline always] valid_input_imbalance n1w n2w =
     let open Non_short_circuiting in
+    (*
     10 * n1w < 8 * (n1w + n2w) && 10 * n2w < 8 * (n1w + n2w)
+       *)
+    n1w < 4 * n2w && n2w < 4 * n1w
 
   let [@inline always] needs_rotation ~deep_side ~shallow_side =
     2 * deep_side > omega2 * shallow_side + delta2
@@ -409,7 +412,7 @@ module [@inline always] Make(K : StandardOrdered) = struct
       T (Node ({ weight = n1w + n2w; n1; k0; v0; n2 }))
     end
 
-let balance_shallow ~n1 ~k0 ~v0 ~n2 =
+let [@inline never] balance_shallow ~n1 ~k0 ~v0 ~n2 =
   match n1, n2 with
 (*$ 
 open Core
@@ -560,7 +563,7 @@ let () = List.iter fusion_cases ~f:(fun l ->
 (*$*)
   | _, _ -> balance_deep ~n1 ~k0 ~v0 ~n2
 
-let balance_shallow ~n1 ~k0 ~v0 ~n2 =
+let [@inline always] balance_shallow ~n1 ~k0 ~v0 ~n2 =
   (*
   let result =
      *)
