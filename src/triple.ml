@@ -825,7 +825,7 @@ let balance_shallow ~n1 ~k0 ~v0 ~n2 =
         | Gt ->
           split ~return n2 k;
           let left = Split_return.left return in
-          if phys_same left n1
+          if phys_same left n2
           then Split_return.set_left return t
           else
             let l = join ~n1 ~k0 ~v0 ~n2:left in
@@ -833,7 +833,7 @@ let balance_shallow ~n1 ~k0 ~v0 ~n2 =
         | Lt ->
           split ~return n1 k;
           let right = Split_return.right return in
-          if phys_same right n2
+          if phys_same right n1
           then Split_return.set_right return t
           else
             let r = join ~n1:right ~k0 ~v0 ~n2 in
