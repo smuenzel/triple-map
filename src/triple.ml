@@ -2400,19 +2400,45 @@ module [@inline always] Stdlib_make(O : Map.OrderedType)
       f
       t1 t2
 
-  (*
-  let union a b =
-    let a,b =
-      if M.weight a > M.weight b
-      then b, a
-      else a, b
-    in
-    M.fold_high ~init:b
-      ~user:()
-      ~f:(fun b () k v -> M.insert_or_replace b k v)
-      a
-     *)
-  let union _ _ = assert false
+  module Union_arg = struct
+      type ('a, 'b, 'r) user_param =
+        F : (M.K.t -> 'r -> 'r -> 'r option) -> ('r, 'r, 'r) user_param
+      [@@unboxed]
+
+      type ('a, 'b, 'r) res = 'r
+
+      let both_present
+          (type a b r) (F f : (a, b, r) user_param)
+          ~k ~(v1 : a) ~(v2 : b) ~erase ~(map : r -> _)
+        =
+        match f k v1 v2 with
+        | None -> erase
+        | Some v' -> map v'
+
+      let present_1
+          (type a b r) (F f : (a, b, r) user_param)
+          ~k ~(v : a) ~erase ~(map : r -> _)
+        = map v
+
+      let present_2
+          (type a b r) (F f : (a, b, r) user_param)
+          ~k ~(v : b) ~erase ~(map : r -> _)
+        = map v
+    end
+
+  (* CR smuenzel: With a dedicated Union module, this could be faster. *)
+  module Union = M.Merge(Union_arg)
+
+  let union f t1 t2 =
+    let er = M.Extremum_return.create () in
+    let srl = M.Split_return.create () in
+    let srr = M.Split_return.create () in
+    Union.merge
+      ~er
+      ~srl
+      ~srr
+      (Union_arg.F f)
+      t1 t2
 
   let cardinal t = M.size t
 
