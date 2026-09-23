@@ -2486,20 +2486,20 @@ module [@inline always] Stdlib_make(O : Map.OrderedType)
     let return = M.Extremum_return.create () in
     (* CR smuenzel: maybe better if [Filter_map] were a functor? *)
     (M.filter_map [@inlined always]) ~return
-      ~f:(fun () ~k ~v ~erase ~map ->
+      ~f:(fun f ~k ~v ~erase ~map ->
           match f k v with
           | false -> erase
           | true -> map v)
-      () t
+      f t
 
   let filter_map f t =
     let return = M.Extremum_return.create () in
     (M.filter_map [@inlined always]) ~return
-      ~f:(fun () ~k ~v ~erase ~map ->
+      ~f:(fun f ~k ~v ~erase ~map ->
           match f k v with
           | None -> erase
           | Some v' -> map v')
-      () t
+      f t
 
   let partition _ = assert false
 
@@ -2538,13 +2538,13 @@ module [@inline always] Stdlib_make(O : Map.OrderedType)
     let both_present e f ~k ~v1 ~v2 =
       if f v1 v2
       then e
-      else raise e
+      else raise_notrace e
 
     let present_1 e f ~is_tail ~k ~v =
-      raise e
+      raise_notrace e
 
     let present_2 e f ~is_tail ~k ~v =
-      raise e
+      raise_notrace e
   end
 
   module Equal = M.Fold_low2(Equal_folder)
@@ -2586,7 +2586,7 @@ module [@inline always] Stdlib_make(O : Map.OrderedType)
 
   let compare f t1 t2 =
     let exception Compare of int in
-    let e i = raise (Compare i) in
+    let e i = raise_notrace (Compare i) in
     try
       Compare.fold
         ~init:{f = e }
@@ -2598,9 +2598,25 @@ module [@inline always] Stdlib_make(O : Map.OrderedType)
     | Compare i -> i
 
 
-  let for_all f t = assert false
+  let for_all f t =
+    let exception Not_all in
+    try
+      M.fold_low ~init:Not_all ~user:f
+        ~f:(fun exn f k v -> if not (f k v) then raise_notrace exn; exn)
+        t |> (ignore : exn -> unit);
+      true
+    with
+    | Not_all -> false
 
-  let exists f t = assert false
+  let exists f t =
+    let exception Exists in
+    try
+      M.fold_low ~init:Exists ~user:f
+        ~f:(fun exn f k v -> if f k v then raise_notrace exn; exn)
+        t |> (ignore : exn -> unit);
+      false
+    with
+    | Exists -> true
 
   let to_list = bindings
 
