@@ -68,6 +68,8 @@ external phys_same : 'a 'b. 'a -> 'b -> bool = "%eq"
 
 
 module [@inline always] Make(K : StandardOrdered) = struct
+  module K = K
+
   type c_empty = [ `Empty ]
   type c_v1 = [ `V1 ]
   type c_v2 = [ `V2 ]
@@ -911,12 +913,12 @@ let balance_shallow ~n1 ~k0 ~v0 ~n2 =
         else join ~n1:n1' ~k0 ~v0:v0' ~n2:n2'
 
   module type Merger = sig
-    type ('a1, 'a2) res
-    type ('a1, 'a2) user_param
+    type ('a1, 'a2, 'r) res
+    type ('a1, 'a2, 'r) user_param
 
-    val both_present : ('a1, 'a2) user_param -> k:K.t -> v1:'a1 -> v2:'a2 -> erase:'cout -> map:(('a1, 'a2) res -> 'cout) -> 'cout
-    val present_1 : ('a1, 'a2) user_param -> k:K.t -> v:'a1 -> erase:'cout -> map:(('a1, 'a2) res -> 'cout) -> 'cout
-    val present_2 : ('a1, 'a2) user_param -> k:K.t -> v:'a2 -> erase:'cout -> map:(('a1, 'a2) res -> 'cout) -> 'cout
+    val both_present : ('a1, 'a2, 'r) user_param -> k:K.t -> v1:'a1 -> v2:'a2 -> erase:'cout -> map:(('a1, 'a2, 'r) res -> 'cout) -> 'cout
+    val present_1 : ('a1, 'a2, 'r) user_param -> k:K.t -> v:'a1 -> erase:'cout -> map:(('a1, 'a2, 'r) res -> 'cout) -> 'cout
+    val present_2 : ('a1, 'a2, 'r) user_param -> k:K.t -> v:'a2 -> erase:'cout -> map:(('a1, 'a2, 'r) res -> 'cout) -> 'cout
   end
 
   module [@inline always] Merge(Merger : Merger) = struct
@@ -2367,7 +2369,36 @@ module [@inline always] Stdlib_make(O : Map.OrderedType)
 
   let remove k t = M.delete t k
 
-  let merge _ = assert false
+  module Merge = M.Merge(struct
+      type ('a, 'b, 'r) user_param = M.K.t -> 'a option -> 'b option -> 'r option
+      type ('a, 'b, 'r) res = 'r
+
+      let both_present f ~k ~v1 ~v2 ~erase ~map =
+        match f k (Some v1) (Some v2) with
+        | None -> erase
+        | Some v' -> map v'
+
+      let present_1 f ~k ~v ~erase ~map =
+        match f k (Some v) None with
+        | None -> erase
+        | Some v' -> map v'
+
+      let present_2 f ~k ~v ~erase ~map =
+        match f k None (Some v) with
+        | None -> erase
+        | Some v' -> map v'
+    end)
+
+  let merge f t1 t2 =
+    let er = M.Extremum_return.create () in
+    let srl = M.Split_return.create () in
+    let srr = M.Split_return.create () in
+    Merge.merge
+      ~er
+      ~srl
+      ~srr
+      f
+      t1 t2
 
   (*
   let union a b =
