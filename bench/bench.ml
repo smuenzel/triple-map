@@ -23,59 +23,36 @@ module type Map_functor = functor (M : Stdlib.Map.OrderedType) -> Stdlib.Map.S w
 module Make (Make : Map_functor) = struct
   module IntMap = Make (Int)
 
+  let find_gen what how =
+    Bench.Test.create_parameterised
+      ~name:("find_opt(in-order)." ^ what)
+      ~args:Test_data.Int.Sorted.args
+      (fun ar ->
+         let ar = Lazy.force ar in
+         let map = Array.fold ~init:IntMap.empty ar ~f:(fun acc i -> IntMap.add i i acc) in
+         let length = Array.length ar in
+         let i = ref 0 in
+         Staged.stage
+           (fun () ->
+              let (_ : int option) = Sys.opaque_identity (IntMap.find_opt (how ar.(!i mod length)) map) in
+              incr i
+           )
+      )
+
+  let find_found = find_gen "found" Fn.id
+  let find_half = find_gen "half_found" (fun v -> v / 2)
+  let find_neg = find_gen "not_found" (fun v -> 1 + v)
+
+
   let find =
-    Bench.Test.create_parameterised
-      ~name:"find_opt(in-order).found"
-      ~args:Test_data.Int.Sorted.args
-      (fun ar ->
-         let ar = Lazy.force ar in
-         let map = Array.fold ~init:IntMap.empty ar ~f:(fun acc i -> IntMap.add i i acc) in
-         let length = Array.length ar in
-         let i = ref 0 in
-         Staged.stage
-           (fun () ->
-              let (_ : int option) = Sys.opaque_identity (IntMap.find_opt ar.(!i mod length) map) in
-              incr i
-           )
-      )
-
-  let find_half =
-    Bench.Test.create_parameterised
-      ~name:"find_opt(in-order).half_found"
-      ~args:Test_data.Int.Sorted.args
-      (fun ar ->
-         let ar = Lazy.force ar in
-         let map = Array.fold ~init:IntMap.empty ar ~f:(fun acc i -> IntMap.add i i acc) in
-         let length = Array.length ar in
-         let i = ref 0 in
-         Staged.stage
-           (fun () ->
-              let (_ : int option) = Sys.opaque_identity (IntMap.find_opt (ar.(!i mod length)/2) map) in
-              incr i
-           )
-      )
-
-  let find_neg =
-    Bench.Test.create_parameterised
-      ~name:"find_opt(in-order).not_found"
-      ~args:Test_data.Int.Sorted.args
-      (fun ar ->
-         let ar = Lazy.force ar in
-         let map = Array.fold ~init:IntMap.empty ar ~f:(fun acc i -> IntMap.add i i acc) in
-         let length = Array.length ar in
-         let i = ref 0 in
-         Staged.stage
-           (fun () ->
-              let (_ : int option) = Sys.opaque_identity (IntMap.find_opt (1 + ar.(!i mod length)) map) in
-              incr i
-           )
-      )
-
-  let tests =
-    [ find
+    [ find_found
     ; find_neg
     ; find_half
     ]
+end
+
+module type Make = sig
+  val find : Bench.Test.t list
 end
 
 module Stdlib_test = Make (Stdlib.Map.Make)
@@ -214,7 +191,9 @@ let run ~stdlib ~triple =
     columns
     analysis
 
-let find_command =
+let generic_command
+    (f : (module Make) -> Bench.Test.t list)
+  =
   Command.basic
     ~summary:""
     [%map_open.Command
@@ -222,16 +201,18 @@ let find_command =
       in
       fun () ->
         run
-          ~stdlib:Stdlib_test.tests
-          ~triple:Triple_test.tests
+          ~stdlib:(f (module Stdlib_test))
+          ~triple:(f (module Triple_test))
     ]
 
+
+let find_command = generic_command (fun (module M : Make) -> M.find)
 
 let command =
   Command.group
     ~summary:""
-    [ "stdlib", Bench.make_command Stdlib_test.tests
-    ; "triple", Bench.make_command Triple_test.tests
+    [ "stdlib", Bench.make_command Stdlib_test.find
+    ; "triple", Bench.make_command Triple_test.find
     ; "find", find_command
     ]
 
