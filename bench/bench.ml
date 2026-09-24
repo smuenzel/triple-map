@@ -97,12 +97,37 @@ module Make (Make : Map_functor) = struct
     [ del_existing
     ; del_new
     ]
+
+  let split_gen what how =
+    Bench.Test.create_parameterised
+      ~name:("split(in-order)." ^ what)
+      ~args:[ List.last_exn Test_data.Int.Sorted.args ]
+      (fun ar ->
+         let ar = Lazy.force ar in
+         let map = Array.fold ~init:IntMap.empty ar ~f:(fun acc i -> IntMap.add i i acc) in
+         let length = Array.length ar in
+         let i = ref 0 in
+         Staged.stage
+           (fun () ->
+              let (_ : _ * _ * _) = Sys.opaque_identity (IntMap.split (how ar.(!i mod length)) map) in
+              incr i
+           )
+      )
+
+  let split_existing = split_gen "existing" Fn.id
+  let split_new = split_gen "missing" (fun v -> 1 + v)
+
+  let split =
+    [ split_existing
+    ; split_new
+    ]
 end
 
 module type Make = sig
   val find : Bench.Test.t list
   val add : Bench.Test.t list
   val del : Bench.Test.t list
+  val split : Bench.Test.t list
 end
 
 module Stdlib_test = Make (Stdlib.Map.Make)
@@ -257,6 +282,7 @@ let generic_command
 let find_command = generic_command (fun (module M : Make) -> M.find)
 let add_command = generic_command (fun (module M : Make) -> M.add)
 let del_command = generic_command (fun (module M : Make) -> M.del)
+let split_command = generic_command (fun (module M : Make) -> M.split)
 
 let command =
   Command.group
@@ -266,6 +292,7 @@ let command =
     ; "find", find_command
     ; "add", add_command
     ; "del", del_command
+    ; "split", split_command
     ]
 
 let () =
