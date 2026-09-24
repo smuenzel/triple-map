@@ -351,10 +351,10 @@ module [@inline always] Make(K : StandardOrdered) = struct
   let [@inline always] needs_rotation ~deep_side ~shallow_side =
     2 * deep_side > omega2 * shallow_side + delta2
 
-  let balance_condition_left_rotation ~n1w ~n2w =
+  let [@inline always] balance_condition_left_rotation ~n1w ~n2w =
     needs_rotation ~deep_side:n1w ~shallow_side:n2w
 
-  let balance_condition_right_rotation ~n1w ~n2w =
+  let [@inline always] balance_condition_right_rotation ~n1w ~n2w =
     needs_rotation ~deep_side:n2w ~shallow_side:n1w
 
   let [@inline always] balanced_size n1 n2 =
@@ -775,7 +775,7 @@ let [@inline always] balance_shallow ~n1 ~k0 ~v0 ~n2 =
     | T (V1 { k1; v1 }) ->
       begin match%compare K.compare k k1 with
         | Eq -> Split_return.set return empty empty; Uopt.some v1
-        | Gt -> Split_return.set  return t empty; Uopt.none
+        | Gt -> Split_return.set return t empty; Uopt.none
         | Lt -> Split_return.set return empty t; Uopt.none
       end
     | T (V2 { k11; v11; k1; v1 }) ->
