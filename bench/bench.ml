@@ -2,7 +2,7 @@ open! Core
 open! Core_bench
 
 module Test_data = struct
-  let lengths = [ 1; 8 ] (*;10 ] (*;16;20;64;100;1000;1024;65536; 100_000; 1_000_000; 16_777_216 ] *) *)
+  let lengths = [ 1; 8; 10;16;20;64;100;1000;1024;65536; 100_000; 1_000_000; 16_777_216 ]
 
   module Int = struct
     module Sorted = struct
@@ -81,7 +81,7 @@ end
 module Stdlib_test = Make (Stdlib.Map.Make)
 module Triple_test = Make (Triple_map.Triple.Stdlib_make)
 
-let responder_string kind a =
+let get_coe0 kind a =
   let regressions = Bench.Analysis_result.regressions a in
   let regression =
     Array.find_exn
@@ -93,21 +93,46 @@ let responder_string kind a =
   let coe =
     Bench.Analysis_result.Regression.coefficients regression
   in
+  coe.(0)
+
+let responder_ratio kind a b =
+  let coe_a = get_coe0 kind a in
+  let coe_b = get_coe0 kind b in
+  let estimate_a =
+    Bench.Analysis_result.Coefficient.estimate
+      coe_a
+  in
+  let estimate_b =
+    Bench.Analysis_result.Coefficient.estimate
+      coe_b
+  in
+  Percent.of_mult
+    (estimate_b /. estimate_a)
+  |> Percent.to_string
+
+let span_string s =
+  Time_float.Span.(of_ns s |> to_string_hum)
+
+let word_string s =
+  Printf.sprintf "%0.2fwd" s
+
+let responder_string to_string kind a =
+  let coe = get_coe0 kind a in
   let estimate =
     Bench.Analysis_result.Coefficient.estimate
-      coe.(0)
+      coe
   in
   (* Approx, don't care about unequal span*)
   let plus_minus =
-    Bench.Analysis_result.Coefficient.ci95 coe.(0)
+    Bench.Analysis_result.Coefficient.ci95 coe
     |> Option.value_exn
     |> Bench.Analysis_result.Ci95.ci95_abs_err ~estimate
     |> fun (lower, upper) ->
     (Float.abs upper +. Float.abs lower) /. 2.0
   in
   Printf.sprintf "%s ± %s"
-    Time_float.Span.(of_ns estimate |> to_string_hum)
-    Time_float.Span.(of_ns plus_minus |> to_string_hum)
+    (to_string estimate)
+    (to_string plus_minus)
 
 let run ~stdlib ~triple =
   let quota =
@@ -159,16 +184,32 @@ let run ~stdlib ~triple =
         )
     ; Ascii_table.Column.create "timing (stdlib)"
         (fun (a,_) ->
-           responder_string `Nanos a
+           responder_string span_string `Nanos a
         )
     ; Ascii_table.Column.create "timing (triple)"
         (fun (_,a) ->
-           responder_string `Nanos a
+           responder_string span_string `Nanos a
+        )
+    ; Ascii_table.Column.create "timing ratio"
+        (fun (a,b) ->
+           responder_ratio `Nanos a b
+        )
+    ; Ascii_table.Column.create "minor words (stdlib)"
+        (fun (a,_) ->
+           responder_string word_string `Minor_allocated a
+        )
+    ; Ascii_table.Column.create "minor words (triple)"
+        (fun (_,a) ->
+           responder_string word_string `Minor_allocated a
+        )
+    ; Ascii_table.Column.create "minor words ratio"
+        (fun (a,b) ->
+           responder_ratio `Minor_allocated a b
         )
     ]
   in
   Ascii_table.output
-    ~limit_width_to:120
+    ~limit_width_to:180
     ~oc:Stdlib.stdout
     columns
     analysis
