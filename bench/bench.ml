@@ -154,32 +154,30 @@ let run ~stdlib ~triple =
   let analysis_stdlib = List.map measurements_stdlib ~f:analyze in
   let analysis_triple = List.map measurements_triple ~f:analyze in
   let analysis = List.zip_exn analysis_stdlib analysis_triple in
+  let mk_col ?(align=Ascii_table.Column.Align.Right) = Ascii_table.Column.create ~align in
   let columns =
-    [ Ascii_table.Column.create "Name"
-        (fun (a,_) ->
-           Bench.Analysis_result.name a
-        )
-    ; Ascii_table.Column.create "timing (stdlib)"
+    [ mk_col "Name" (fun (a,_) -> Bench.Analysis_result.name a)
+    ; mk_col "timing (stdlib)"
         (fun (a,_) ->
            responder_string span_string `Nanos a
         )
-    ; Ascii_table.Column.create "timing (triple)"
+    ; mk_col "timing (triple)"
         (fun (_,a) ->
            responder_string span_string `Nanos a
         )
-    ; Ascii_table.Column.create "timing ratio"
+    ; mk_col "timing ratio"
         (fun (a,b) ->
            responder_ratio `Nanos a b
         )
-    ; Ascii_table.Column.create "minor words (stdlib)"
+    ; mk_col "minor words (stdlib)"
         (fun (a,_) ->
            responder_string word_string `Minor_allocated a
         )
-    ; Ascii_table.Column.create "minor words (triple)"
+    ; mk_col "minor words (triple)"
         (fun (_,a) ->
            responder_string word_string `Minor_allocated a
         )
-    ; Ascii_table.Column.create "minor words ratio"
+    ; mk_col "minor words ratio"
         (fun (a,b) ->
            responder_ratio `Minor_allocated a b
         )
