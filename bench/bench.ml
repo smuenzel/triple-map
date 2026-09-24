@@ -165,7 +165,7 @@ let run ~stdlib ~triple =
   let quota =
     Bench.Quota.Span (Time_float.Span.of_sec 2.)
   in
-  let bootstrap_trials = 4 in
+  let bootstrap_trials = 1_000 in
   let analysis_timing =
     Bench.Analysis_config.create
       ~bootstrap_trials
