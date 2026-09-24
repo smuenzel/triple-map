@@ -2,7 +2,7 @@ open! Core
 open! Core_bench
 
 module Test_data = struct
-  let lengths = [ 1; 8;10;16;20;64;100;1000;1024;65536; 100_000; 1_000_000; 16_777_216 ]
+  let lengths = [ 1; 8 ] (*;10 ] (*;16;20;64;100;1000;1024;65536; 100_000; 1_000_000; 16_777_216 ] *) *)
 
   module Int = struct
     module Sorted = struct
@@ -81,11 +81,117 @@ end
 module Stdlib_test = Make (Stdlib.Map.Make)
 module Triple_test = Make (Triple_map.Triple.Stdlib_make)
 
+let responder_string kind a =
+  let regressions = Bench.Analysis_result.regressions a in
+  let regression =
+    Array.find_exn
+      ~f:(fun r ->
+          Poly.equal kind (Bench.Analysis_result.Regression.responder r)
+        )
+      regressions
+  in
+  let coe =
+    Bench.Analysis_result.Regression.coefficients regression
+  in
+  let estimate =
+    Bench.Analysis_result.Coefficient.estimate
+      coe.(0)
+  in
+  (* Approx, don't care about unequal span*)
+  let plus_minus =
+    Bench.Analysis_result.Coefficient.ci95 coe.(0)
+    |> Option.value_exn
+    |> Bench.Analysis_result.Ci95.ci95_abs_err ~estimate
+    |> fun (lower, upper) ->
+    (Float.abs upper +. Float.abs lower) /. 2.0
+  in
+  Printf.sprintf "%s ± %s"
+    Time_float.Span.(of_ns estimate |> to_string_hum)
+    Time_float.Span.(of_ns plus_minus |> to_string_hum)
+
+let run ~stdlib ~triple =
+  let quota =
+    Bench.Quota.Span (Time_float.Span.of_sec 2.)
+  in
+  let bootstrap_trials = 4 in
+  let analysis_timing =
+    Bench.Analysis_config.create
+      ~bootstrap_trials
+      ~responder:`Nanos
+      ~predictors:[ `Runs ]
+      ()
+  in
+  let analysis_minor_words =
+    Bench.Analysis_config.create
+      ~bootstrap_trials
+      ~responder:`Minor_allocated
+      ~predictors:[ `Runs ]
+      ()
+  in
+  let run_config =
+    Bench.Run_config.create
+      ~quota
+      ()
+  in
+  let measurements_stdlib =
+    Bench.measure
+      ~run_config
+      stdlib
+  in
+  let measurements_triple =
+    Bench.measure
+      ~run_config
+      triple
+  in
+  let analyze test =
+    Bench.analyze
+      ~analysis_configs:[ analysis_timing; analysis_minor_words ]
+      test
+    |> Or_error.ok_exn
+  in
+  let analysis_stdlib = List.map measurements_stdlib ~f:analyze in
+  let analysis_triple = List.map measurements_triple ~f:analyze in
+  let analysis = List.zip_exn analysis_stdlib analysis_triple in
+  let columns =
+    [ Ascii_table.Column.create "Name"
+        (fun (a,_) ->
+           Bench.Analysis_result.name a
+        )
+    ; Ascii_table.Column.create "timing (stdlib)"
+        (fun (a,_) ->
+           responder_string `Nanos a
+        )
+    ; Ascii_table.Column.create "timing (triple)"
+        (fun (_,a) ->
+           responder_string `Nanos a
+        )
+    ]
+  in
+  Ascii_table.output
+    ~limit_width_to:120
+    ~oc:Stdlib.stdout
+    columns
+    analysis
+
+let find_command =
+  Command.basic
+    ~summary:""
+    [%map_open.Command
+      let () = return ()
+      in
+      fun () ->
+        run
+          ~stdlib:Stdlib_test.tests
+          ~triple:Triple_test.tests
+    ]
+
+
 let command =
   Command.group
     ~summary:""
     [ "stdlib", Bench.make_command Stdlib_test.tests
     ; "triple", Bench.make_command Triple_test.tests
+    ; "find", find_command
     ]
 
 let () =
