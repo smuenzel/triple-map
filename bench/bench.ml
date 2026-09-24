@@ -156,7 +156,7 @@ let run ~stdlib ~triple =
   let analysis = List.zip_exn analysis_stdlib analysis_triple in
   let mk_col ?(align=Ascii_table.Column.Align.Right) = Ascii_table.Column.create ~align in
   let columns =
-    [ mk_col "Name" (fun (a,_) -> Bench.Analysis_result.name a)
+    [ mk_col ~align:Left "Name" (fun (a,_) -> Bench.Analysis_result.name a)
     ; mk_col "timing (stdlib)"
         (fun (a,_) ->
            responder_string span_string `Nanos a
