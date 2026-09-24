@@ -1,0 +1,4 @@
+(executable
+  (name bench)
+  (libraries core_bench triple_map core_unix)
+  (preprocess (pps ppx_jane)))

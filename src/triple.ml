@@ -43,10 +43,6 @@ end
 
 module [@inline always] OrderedOfStandard (X : StandardOrdered) = struct
   type t = X.t
-  (* Branches returning known constructors: this is the only form flambda
-     can fuse with the match consuming the result (case-of-case). A
-     branchless arithmetic conversion can never be fused back into control
-     flow. *)
   let [@inline always] compare a b : Comparison.t =
     match%compare X.compare a b with
     | Eq -> Eq
