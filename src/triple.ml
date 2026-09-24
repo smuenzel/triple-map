@@ -2413,40 +2413,40 @@ module [@inline always] Stdlib_make(O : Map.OrderedType)
       t1 t2
 
   module Union_arg = struct
-      type ('a, 'b, 'r) user_param =
+    type ('a, 'b, 'r) user_param =
         F : (M.K.t -> 'r -> 'r -> 'r option) -> ('r, 'r, 'r) user_param
-      [@@unboxed]
+    [@@unboxed]
 
-      type ('a, 'b, 'r) res = 'r
+    type ('a, 'b, 'r) res = 'r
 
-      let both_present
-          (type a b r) (F f : (a, b, r) user_param)
-          ~k ~(v1 : a) ~(v2 : b) ~erase ~(map : r -> _)
-        =
-        match f k v1 v2 with
-        | None -> erase
-        | Some v' -> map v'
+    let both_present
+        (type a b r) (F f : (a, b, r) user_param)
+        ~k ~(v1 : a) ~(v2 : b) ~erase ~(map : r -> _)
+      =
+      match f k v1 v2 with
+      | None -> erase
+      | Some v' -> map v'
 
-      let present_1
-          (type a b r) (F f : (a, b, r) user_param)
-          ~k ~(v : a) ~erase ~(map : r -> _)
-        = map v
+    let present_1
+        (type a b r) (F f : (a, b, r) user_param)
+        ~k ~(v : a) ~erase ~(map : r -> _)
+      = map v
 
-      let present_2
-          (type a b r) (F f : (a, b, r) user_param)
-          ~k ~(v : b) ~erase ~(map : r -> _)
-        = map v
+    let present_2
+        (type a b r) (F f : (a, b, r) user_param)
+        ~k ~(v : b) ~erase ~(map : r -> _)
+      = map v
 
-      let remainder_1
-          (type a b r) (F f : (a, b, r) user_param)
-          ~return (t : a M.t) : r t =
-        t
+    let remainder_1
+        (type a b r) (F f : (a, b, r) user_param)
+        ~return (t : a M.t) : r t =
+      t
 
-      let remainder_2
-          (type a b r) (F f : (a, b, r) user_param)
-          ~return (t : b M.t) : r t=
-        t
-    end
+    let remainder_2
+        (type a b r) (F f : (a, b, r) user_param)
+        ~return (t : b M.t) : r t=
+      t
+  end
 
   module Union = M.Merge_base(Union_arg)
 
