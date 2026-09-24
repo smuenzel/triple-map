@@ -35,9 +35,22 @@ module Make (Make : Map_functor) = struct
          Staged.stage
            (fun () ->
               let (_ : int option) = Sys.opaque_identity (IntMap.find_opt ar.(!i mod length) map) in
-              (*
-              let (_ : int option) = Sys.opaque_identity (IntMap.find_opt (Random.int Int.max_value) map) in
-                 *)
+              incr i
+           )
+      )
+
+  let find_half =
+    Bench.Test.create_parameterised
+      ~name:"find_opt(in-order).half_found"
+      ~args:Test_data.Int.Sorted.args
+      (fun ar ->
+         let ar = Lazy.force ar in
+         let map = Array.fold ~init:IntMap.empty ar ~f:(fun acc i -> IntMap.add i i acc) in
+         let length = Array.length ar in
+         let i = ref 0 in
+         Staged.stage
+           (fun () ->
+              let (_ : int option) = Sys.opaque_identity (IntMap.find_opt (ar.(!i mod length)/2) map) in
               incr i
            )
       )
@@ -53,10 +66,7 @@ module Make (Make : Map_functor) = struct
          let i = ref 0 in
          Staged.stage
            (fun () ->
-              let (_ : int option) = Sys.opaque_identity (IntMap.find_opt (ar.(!i mod length)/2) map) in
-              (*
-              let (_ : int option) = Sys.opaque_identity (IntMap.find_opt (Random.int Int.max_value) map) in
-                 *)
+              let (_ : int option) = Sys.opaque_identity (IntMap.find_opt (1 + ar.(!i mod length)) map) in
               incr i
            )
       )
@@ -64,6 +74,7 @@ module Make (Make : Map_functor) = struct
   let tests =
     [ find
     ; find_neg
+    ; find_half
     ]
 end
 
