@@ -49,10 +49,35 @@ module Make (Make : Map_functor) = struct
     ; find_neg
     ; find_half
     ]
+
+  let add_gen what how =
+    Bench.Test.create_parameterised
+      ~name:("insert_or_replace(in-order)." ^ what)
+      ~args:Test_data.Int.Sorted.args
+      (fun ar ->
+         let ar = Lazy.force ar in
+         let map = Array.fold ~init:IntMap.empty ar ~f:(fun acc i -> IntMap.add i i acc) in
+         let length = Array.length ar in
+         let i = ref 0 in
+         Staged.stage
+           (fun () ->
+              let (_ : int IntMap.t) = Sys.opaque_identity (IntMap.add (how ar.(!i mod length)) (-1) map) in
+              incr i
+           )
+      )
+
+  let add_existing = add_gen "existing" Fn.id
+  let add_new = add_gen "new" (fun v -> 1 + v)
+
+  let add =
+    [ add_existing
+    ; add_new
+    ]
 end
 
 module type Make = sig
   val find : Bench.Test.t list
+  val add : Bench.Test.t list
 end
 
 module Stdlib_test = Make (Stdlib.Map.Make)
@@ -205,6 +230,7 @@ let generic_command
 
 
 let find_command = generic_command (fun (module M : Make) -> M.find)
+let add_command = generic_command (fun (module M : Make) -> M.add)
 
 let command =
   Command.group
@@ -212,6 +238,7 @@ let command =
     [ "stdlib", Bench.make_command Stdlib_test.find
     ; "triple", Bench.make_command Triple_test.find
     ; "find", find_command
+    ; "add", add_command
     ]
 
 let () =
