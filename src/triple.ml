@@ -408,13 +408,16 @@ module [@inline always] Make(K : StandardOrdered) = struct
       | _ -> assert false (* See rocq proof *)
     end
 
-  let balance_deep ~n1 ~k0 ~v0 ~n2 =
-    let n1w = weight n1 in
-    let n2w = weight n2 in
+  let [@inline always] balance_deep_with_weights ~n1w ~n2w ~n1 ~k0 ~v0 ~n2 =
     if balance_condition_any_rotation ~n1w ~n2w
     then balance_deep_rotate ~n1w ~n2w ~n1 ~k0 ~v0 ~n2
     else
       T (Node ({ weight = n1w + n2w; n1; k0; v0; n2 }))
+
+  let balance_deep ~n1 ~k0 ~v0 ~n2 =
+    let n1w = weight n1 in
+    let n2w = weight n2 in
+    balance_deep_with_weights ~n1w ~n2w ~n1 ~k0 ~v0 ~n2
 
 let [@inline never] balance_shallow ~n1 ~k0 ~v0 ~n2 =
   match n1, n2 with
@@ -587,6 +590,11 @@ let [@inline always] balance_shallow ~n1 ~k0 ~v0 ~n2 =
   result
          *)
 
+let [@inline always] balance_shallow_with_weights ~n1w ~n2w ~n1 ~k0 ~v0 ~n2 =
+  match n1, n2 with
+  | T (Node _), T (Node _) -> balance_deep_with_weights ~n1w ~n2w ~n1 ~k0 ~v0 ~n2
+  | _, _ -> balance_shallow ~n1 ~k0 ~v0 ~n2
+
   module Uopt : sig
     type 'a t
 
@@ -727,7 +735,7 @@ let [@inline always] balance_shallow ~n1 ~k0 ~v0 ~n2 =
     and n2w = weight n2
     in
     if valid_input_imbalance n1w n2w
-    then balance_shallow ~n1 ~k0 ~v0 ~n2
+    then balance_shallow_with_weights ~n1w ~n2w ~n1 ~k0 ~v0 ~n2
     else begin
       if n1w > n2w
       then begin
@@ -754,7 +762,7 @@ let [@inline always] balance_shallow ~n1 ~k0 ~v0 ~n2 =
   and join_right ~n1 ~k0 ~v0 ~n2 ~n2w =
     let n1w = weight n1 in
     if valid_input_imbalance n1w n2w
-    then balance_shallow ~n1 ~k0 ~v0 ~n2
+    then balance_shallow_with_weights ~n1w ~n2w ~n1 ~k0 ~v0 ~n2
     else match n1 with
       | T (Node { weight = _; n1 = n11; k0 = k1; v0 = v1; n2 = n12 }) ->
           balance_shallow ~n1:n11 ~k0:k1 ~v0:v1
@@ -764,7 +772,7 @@ let [@inline always] balance_shallow ~n1 ~k0 ~v0 ~n2 =
   and join_left ~n1 ~n1w ~k0 ~v0 ~n2 =
     let n2w = weight n2 in
     if valid_input_imbalance n1w n2w
-    then balance_shallow ~n1 ~k0 ~v0 ~n2
+    then balance_shallow_with_weights ~n1w ~n2w ~n1 ~k0 ~v0 ~n2
     else match n2 with
       | T (Node { weight = _; n1 = n21; k0 = k2; v0 = v2; n2 = n22 }) ->
         balance_shallow

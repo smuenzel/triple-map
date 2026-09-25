@@ -121,6 +121,30 @@ module Make (Make : Map_functor) = struct
     [ split_existing
     ; split_new
     ]
+
+  let union_gen what how =
+    Bench.Test.create_parameterised
+      ~name:("union(in-order)." ^ what)
+      ~args:(List.tl_exn (List.rev Test_data.Int.Sorted.args))
+      (fun ar ->
+         let ar = Lazy.force ar in
+         let map1 = Array.fold ~init:IntMap.empty ar ~f:(fun acc i -> IntMap.add i i acc) in
+         let map2 = Array.fold ~init:IntMap.empty ar ~f:(fun acc i -> IntMap.add (how i) i acc) in
+         let i = ref 0 in
+         Staged.stage
+           (fun () ->
+              let (_ : _ IntMap.t) = Sys.opaque_identity (IntMap.union (fun _ _ a -> Some a) map1 map2) in
+              incr i
+           )
+      )
+
+  let union_same = union_gen "same" Fn.id
+  let union_interleave = union_gen "interleave" ((+) 1)
+
+  let union =
+    [ union_same
+    ; union_interleave
+    ]
 end
 
 module type Make = sig
@@ -128,6 +152,7 @@ module type Make = sig
   val add : Bench.Test.t list
   val del : Bench.Test.t list
   val split : Bench.Test.t list
+  val union : Bench.Test.t list
 end
 
 module Stdlib_test = Make (Stdlib.Map.Make)
@@ -188,7 +213,7 @@ let responder_string to_string kind a =
 
 let run ~stdlib ~triple =
   let quota =
-    Bench.Quota.Span (Time_float.Span.of_sec 2.)
+    Bench.Quota.Span (Time_float.Span.of_int_sec 8)
   in
   let bootstrap_trials = 1_000 in
   let analysis_timing =
@@ -283,6 +308,7 @@ let find_command = generic_command (fun (module M : Make) -> M.find)
 let add_command = generic_command (fun (module M : Make) -> M.add)
 let del_command = generic_command (fun (module M : Make) -> M.del)
 let split_command = generic_command (fun (module M : Make) -> M.split)
+let union_command = generic_command (fun (module M : Make) -> M.union)
 
 let command =
   Command.group
@@ -293,6 +319,7 @@ let command =
     ; "add", add_command
     ; "del", del_command
     ; "split", split_command
+    ; "union", union_command
     ]
 
 let () =
