@@ -357,6 +357,10 @@ module [@inline always] Make(K : StandardOrdered) = struct
   let [@inline always] balance_condition_right_rotation ~n1w ~n2w =
     needs_rotation ~deep_side:n2w ~shallow_side:n1w
 
+  let [@inline always] balance_condition_any_rotation ~n1w ~n2w =
+    let open Non_short_circuiting in
+    (balance_condition_left_rotation ~n1w ~n2w) || (balance_condition_right_rotation ~n1w ~n2w)
+
   let [@inline always] balanced_size n1 n2 =
     let open Non_short_circuiting in
     (omega2 * n1 + delta2 >= 2 * n2) && (omega2 * n2 + delta2 >= 2 * n1)
@@ -377,9 +381,7 @@ module [@inline always] Make(K : StandardOrdered) = struct
   let [@inline always] balance_condition_right_single ~n1w ~n211w ~n212w ~n22w =
     needs_single_rotation2 ~n11w:n22w ~n121w:n212w ~n122w:n211w ~n2w:n1w
 
-  let balance_deep ~n1 ~k0 ~v0 ~n2 =
-    let n1w = weight n1 in
-    let n2w = weight n2 in
+  let [@inline never] balance_deep_rotate ~n1w ~n2w ~n1 ~k0 ~v0 ~n2 =
     if balance_condition_left_rotation ~n1w ~n2w
     then begin
       match n1 with
@@ -392,8 +394,8 @@ module [@inline always] Make(K : StandardOrdered) = struct
             single_rotation_left_node ~n1w ~n2w ~n11 ~n1k ~n1v ~n12 ~n0k:k0 ~n0v:v0 ~n2
         end
       | _ -> assert false (* See rocq proof *)
-    end else if balance_condition_right_rotation ~n1w ~n2w
-    then begin
+    end else (* if balance_condition_right_rotation ~n1w ~n2w then *)
+      begin
       match n2 with
       | T (Node ({ weight = _; n1 = n21; k0 = n2k; v0 = n2v; n2 = n22 })) ->
         begin match n21 with
@@ -404,9 +406,15 @@ module [@inline always] Make(K : StandardOrdered) = struct
             single_rotation_right_node ~n1w ~n2w ~n1 ~n0k:k0 ~n0v:v0 ~n21 ~n2k ~n2v ~n22
         end
       | _ -> assert false (* See rocq proof *)
-    end else begin
-      T (Node ({ weight = n1w + n2w; n1; k0; v0; n2 }))
     end
+
+  let balance_deep ~n1 ~k0 ~v0 ~n2 =
+    let n1w = weight n1 in
+    let n2w = weight n2 in
+    if balance_condition_any_rotation ~n1w ~n2w
+    then balance_deep_rotate ~n1w ~n2w ~n1 ~k0 ~v0 ~n2
+    else
+      T (Node ({ weight = n1w + n2w; n1; k0; v0; n2 }))
 
 let [@inline never] balance_shallow ~n1 ~k0 ~v0 ~n2 =
   match n1, n2 with
