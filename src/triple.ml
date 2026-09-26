@@ -1216,7 +1216,7 @@ let [@inline always] balance_shallow_with_weights ~n1w ~n2w ~n1 ~k0 ~v0 ~n2 =
           | Eq -> C.existing t ~delete_fun:V2.delete_top ~replace_fun:V2.replace_top ~unchanged_fun:unchanged k v1 user_param
           | Lt ->
             begin match%compare K.compare k k11 with
-              | Eq -> C.existing t ~delete_fun:V2.delete_bottom ~replace_fun:V2.replace_bottom ~unchanged_fun:unchanged k v1 user_param
+              | Eq -> C.existing t ~delete_fun:V2.delete_bottom ~replace_fun:V2.replace_bottom ~unchanged_fun:unchanged k v11 user_param
               | Lt -> C.missing t k ~insert_fun:V2.insert_bottom ~unchanged_fun:unchanged k user_param
               | Gt -> C.missing t k ~insert_fun:V2.insert_middle ~unchanged_fun:unchanged k user_param
             end
@@ -1227,13 +1227,13 @@ let [@inline always] balance_shallow_with_weights ~n1w ~n2w ~n1 ~k0 ~v0 ~n2 =
           | Eq -> C.existing t ~delete_fun:V3.delete_top ~replace_fun:V3.replace_top ~unchanged_fun:unchanged k v1 user_param
           | Lt ->
             begin match%compare K.compare k k11 with
-              | Eq -> C.existing t ~delete_fun:V3.delete_left ~replace_fun:V3.replace_left ~unchanged_fun:unchanged k v1 user_param
+              | Eq -> C.existing t ~delete_fun:V3.delete_left ~replace_fun:V3.replace_left ~unchanged_fun:unchanged k v11 user_param
               | Lt -> C.missing t k ~insert_fun:V3.insert_below_11 ~unchanged_fun:unchanged k user_param
               | Gt -> C.missing t k ~insert_fun:V3.insert_between_11_1 ~unchanged_fun:unchanged k user_param
             end
           | Gt ->
             begin match%compare K.compare k k12 with
-              | Eq -> C.existing t ~delete_fun:V3.delete_right ~replace_fun:V3.replace_right ~unchanged_fun:unchanged k v1 user_param
+              | Eq -> C.existing t ~delete_fun:V3.delete_right ~replace_fun:V3.replace_right ~unchanged_fun:unchanged k v12 user_param
               | Lt -> C.missing t k ~insert_fun:V3.insert_between_1_12 ~unchanged_fun:unchanged k user_param
               | Gt -> C.missing t k ~insert_fun:V3.insert_above_12 ~unchanged_fun:unchanged k user_param
             end
