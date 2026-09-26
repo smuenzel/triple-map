@@ -4,7 +4,39 @@ open! Core_bench
 module Test_data = struct
   let lengths = [ 1; 8; 10;16;20;64;100;1000;1024;65536; 100_000; 1_000_000; 16_777_216 ]
 
+  let length_args =
+    List.map lengths ~f:(fun length ->
+      Int.to_string_hum length, length)
+
+  module Properties = struct
+    module Kind = struct
+      type t =
+        | Random
+        | Dense_with_spaces
+      [@@deriving sexp, hash, compare]
+    end
+
+    module T = struct
+      type t =
+        { kind : Kind.t
+        ; length : int
+        } [@@deriving sexp, hash, compare]
+    end
+    include T
+    include Hashable.Make (T)
+  end
+
   module Int = struct
+    let create =
+      Memo.general ~hashable:Properties.hashable
+        (fun { kind; length } ->
+           match kind with
+           | Random ->
+             Array.init length ~f:(fun _ -> Random.int Int.max_value)
+           | Dense_with_spaces ->
+             Array.init length ~f:(fun i -> 2*i)
+        )
+
     module Sorted = struct
       let make length =
         lazy begin
@@ -22,6 +54,25 @@ module type Map_functor = functor (M : Stdlib.Map.OrderedType) -> Stdlib.Map.S w
 
 module Make (Make : Map_functor) = struct
   module IntMap = Make (Int)
+
+  let find_random what how =
+    Bench.Test.create_parameterised
+      ~name:("find(random)." ^ what)
+      ~args:Test_data.length_args
+      (fun length ->
+         let ar = Test_data.Int.create { kind = Random; length } in
+         let map = Array.fold ~init:IntMap.empty ar ~f:(fun acc i -> IntMap.add i i acc) in
+         Staged.stage
+           (fun () ->
+              let i = how ar in
+              let (_ : int option) = Sys.opaque_identity (IntMap.find_opt i map) in
+              ()
+           )
+      )
+
+  let find_random_found = find_random "found" (fun ar -> ar.(Random.int (Array.length ar)))
+  let find_random_not_found = find_random "not_found" (fun ar -> 1 + ar.(Random.int (Array.length ar)))
+
 
   let find_gen what how =
     Bench.Test.create_parameterised
@@ -48,6 +99,8 @@ module Make (Make : Map_functor) = struct
     [ find_found
     ; find_neg
     ; find_half
+    ; find_random_found
+    ; find_random_not_found
     ]
 
   let add_gen what how =
@@ -213,7 +266,7 @@ let responder_string to_string kind a =
 
 let run ~stdlib ~triple =
   let quota =
-    Bench.Quota.Span (Time_float.Span.of_int_sec 8)
+    Bench.Quota.Span (Time_float.Span.of_int_sec 2)
   in
   let bootstrap_trials = 1_000 in
   let analysis_timing =
