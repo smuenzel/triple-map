@@ -266,7 +266,7 @@ let responder_string to_string kind a =
 
 let run ~stdlib ~triple =
   let quota =
-    Bench.Quota.Span (Time_float.Span.of_int_sec 2)
+    Bench.Quota.Num_calls 55
   in
   let bootstrap_trials = 1_000 in
   let analysis_timing =
