@@ -99,6 +99,8 @@ module [@inline always] Make(K : StandardOrdered) = struct
     type +!'v leaf = L : ('nconstructor, n_leaf, 'v) node -> 'v leaf [@@unboxed]
 
     val empty : 'v t
+
+    val leaf_to_node : 'v leaf -> 'v t
   end = struct
     type empty = unit
     type ('nconstructor, 'nkind, +!'v) node =
@@ -121,6 +123,8 @@ module [@inline always] Make(K : StandardOrdered) = struct
     type +!'v leaf = L : ('nconstructor, n_leaf, 'v) node -> 'v leaf [@@unboxed]
 
     let empty = T (Empty ())
+
+    let leaf_to_node (L n) = T n
   end
   include T
 
@@ -638,6 +642,77 @@ let [@inline always] balance_shallow_with_weights ~n1w ~n2w ~n1 ~k0 ~v0 ~n2 =
       end
     end
   end
+
+  module Obj_array : sig
+    type 'a t
+
+    val create_invalid : int -> 'a t
+    val create : int -> 'a -> 'a t
+    val length : 'a t -> int
+    val unsafe_get : 'a t -> int -> 'a
+    val unsafe_set : 'a t -> int -> 'a -> unit
+  end = struct
+    type 'a t = Obj.t array
+
+    let length t = Array.length t
+
+    type not_a_float =
+      | Not_a_float_0
+      | Not_a_float_1 of int
+
+    let _not_a_float_0 = Not_a_float_0
+    let _not_a_float_1 = Not_a_float_1 42
+
+    let unsafe_get (type a) (t : a t) i : a =
+      Obj.repr
+        (Array.unsafe_get (Sys.opaque_identity (Obj.magic t : not_a_float array)) i
+         : not_a_float)
+      |> Obj.obj
+
+    let unsafe_set (type a) (t : a t) i v =
+      Array.unsafe_set (Sys.opaque_identity (Obj.magic t : not_a_float array)) i
+        (Obj.obj (Sys.opaque_identity (Obj.repr v)) : not_a_float)
+
+    let create_invalid n =
+      Array.make n (Obj.repr 0)
+
+    let create n v =
+      let vr = Obj.repr v in
+      if Obj.is_int vr || Obj.tag vr <> Obj.double_tag
+      then Array.make n vr
+      else
+        let a = Array.make n (Obj.repr 0) in
+        let v = Sys.opaque_identity v in
+        for i = 0 to n - 1 do
+          unsafe_set a i v
+        done;
+        a
+  end
+
+  let unsafe_of_sorted_small_array ~offset ~count ~keys:k ~values:v =
+    let [@inline always] ( .%{} ) a i = Obj_array.unsafe_get a (i + offset) in
+    match count with
+    | 0 -> empty
+    | 1 -> T (V1 { k1 = k.%{0}; v1 = v.%{0} })
+    | 2 -> T (V2 { k11 = k.%{0}; v11 = v.%{0}; k1 = k.%{1}; v1 = v.%{1} })
+    | 3 -> T (V3 { k11 = k.%{0}; v11 = v.%{0}; k1 = k.%{1}; v1 = v.%{1}; k12 = k.%{2}; v12 = v.%{2} })
+    | 4 -> T (Node { weight = 5
+                   ; n1 = T (V2 { k11 = k.%{0}; v11 = v.%{0}; k1 = k.%{1}; v1 = v.%{1} })
+                   ; k0 = k.%{2}; v0 = v.%{2}
+                   ; n2 = T (V1 { k1 = k.%{3}; v1 = v.%{3} })
+                   })
+    | 5 -> T (Node { weight = 6
+                   ; n1 = T (V2 { k11 = k.%{0}; v11 = v.%{0}; k1 = k.%{1}; v1 = v.%{1} })
+                   ; k0 = k.%{2}; v0 = v.%{2}
+                   ; n2 = T (V2 { k11 = k.%{3}; v11 = v.%{3}; k1 = k.%{4}; v1 = v.%{4} })
+                   })
+    | 6 -> T (Node { weight = 7
+                   ; n1 = T (V3 { k11 = k.%{0}; v11 = v.%{0}; k1 = k.%{1}; v1 = v.%{1}; k12 = k.%{2}; v12 = v.%{2} })
+                   ; k0 = k.%{3}; v0 = v.%{3}
+                   ; n2 = T (V2 { k11 = k.%{4}; v11 = v.%{4}; k1 = k.%{5}; v1 = v.%{5} })
+                   })
+    | _ -> assert false
+
 
   (* Avoid allocating a return value at each intermediate node, just
      do it once *)
@@ -1180,10 +1255,10 @@ let [@inline always] balance_shallow_with_weights ~n1w ~n2w ~n1 ~k0 ~v0 ~n2 =
   let insert_or_replace t k v = Insert_or_replace.change t k v
 
   module type Find = sig
-    type 'a user
-    type 'a return
-    val found : K.t -> 'a -> 'a user -> 'a return
-    val missing : K.t -> 'a user -> 'a return
+    type ('a, 'r) user
+    type ('a, 'r) return
+    val found : K.t -> 'a -> ('a, 'r) user -> ('a, 'r) return
+    val missing : K.t -> ('a, 'r) user -> ('a, 'r) return
   end
 
   module[@inline always] Make_find(F : Find) = struct
@@ -1220,8 +1295,8 @@ let [@inline always] balance_shallow_with_weights ~n1w ~n2w ~n1 ~k0 ~v0 ~n2 =
   end
 
   module Find_exn = Make_find(struct
-      type 'a user = unit
-      type 'a return = 'a
+      type ('a, _) user = unit
+      type ('a, _) return = 'a
       let found k v _ = v
       let missing k _ = raise Not_found
     end)
@@ -1229,13 +1304,20 @@ let [@inline always] balance_shallow_with_weights ~n1w ~n2w ~n1 ~k0 ~v0 ~n2 =
   let find_exn t k = Find_exn.find t k ()
 
   module Find_opt = Make_find(struct
-      type 'a user = unit
-      type 'a return = 'a option
+      type ('a, _) user = unit
+      type ('a, _) return = 'a option
       let [@inline always] found k v _ = Some v
       let [@inline always] missing k _ = None
     end)
 
   let find_opt t k = Find_opt.find t k ()
+
+  module Find_uopt = Make_find(struct
+      type ('a, _) user = unit
+      type ('a, _) return = 'a Uopt.t
+      let found k v _ = Uopt.some v
+      let missing k _ = Uopt.none
+    end)
 
   let rec fold_low ~init ~user ~f (T t) =
     match t with
@@ -2254,6 +2336,134 @@ let [@inline always] balance_shallow_with_weights ~n1w ~n2w ~n1 ~k0 ~v0 ~n2 =
     let erase = Uopt.none
     let map = Uopt.some
 
+    let unsafe_get_leaf_key (type a) (l : a leaf) i : K.t =
+      Obj_array.unsafe_get (Obj.magic l : K.t Obj_array.t) (2*i)
+
+    let unsafe_get_leaf_value (type a) (l : a leaf) i : a =
+      Obj_array.unsafe_get (Obj.magic l : a Obj_array.t) (2*i+1)
+
+    let of_short_rev_list keys values =
+      match keys, values with
+      | [], [] -> empty
+      | [k], [v] -> T (V1 { k1 = k; v1 = v })
+      | [k1; k11], [v1; v11] -> T (V2 { k11 = k11; v11 = v11; k1 = k1; v1 = v1 })
+      | [k1; k11; k12], [v1; v11; v12] -> T (V3 { k11 = k11; v11 = v11; k1 = k1; v1 = v1; k12 = k12; v12 = v12 })
+      | [k3; k2; k1; k0], [v3; v2; v1; v0] ->
+        T (Node { weight = 5
+                ; n1 = T (V2 { k11 = k0; v11 = v0; k1 = k1; v1 = v1 })
+                ; k0 = k2; v0 = v2
+                ; n2 = T (V1 { k1 = k3; v1 = v3 })
+                })
+      | [k4; k3; k2; k1; k0], [v4; v3; v2; v1; v0] ->
+        T (Node { weight = 6
+                ; n1 = T (V2 { k11 = k0; v11 = v0; k1 = k1; v1 = v1 })
+                ; k0 = k2; v0 = v2
+                ; n2 = T (V2 { k11 = k3; v11 = v3; k1 = k4; v1 = v4 })
+                })
+      | [k5; k4; k3; k2; k1; k0], [v5; v4; v3; v2; v1; v0] ->
+        T (Node { weight = 7
+                ; n1 = T (V3 { k11 = k0; v11 = v0; k1 = k1; v1 = v1; k12 = k2; v12 = v2 })
+                ; k0 = k3; v0 = v3
+                ; n2 = T (V2 { k11 = k4; v11 = v4; k1 = k5; v1 = v5 })
+                })
+      | _ -> assert false
+
+    let merge_leaf_non_empty (type a1 a2) user (l1 : a1 leaf) (l2 : a2 leaf) =
+      let len_1 = weight_leaf l1 - 1 in
+      let len_2 = weight_leaf l2 - 1 in
+      let out_keys = ref [] in
+      let out_values = ref [] in
+      let out_len = ref 0 in
+      let i_1 = ref 0 in
+      let i_2 = ref 0 in
+      let identical_1 = ref 0 in
+      let identical_2 = ref 0 in
+      while
+        !i_1 < len_1
+        && !i_2 < len_2
+      do
+        let key_1 = unsafe_get_leaf_key l1 !i_1 in
+        let key_2 = unsafe_get_leaf_key l2 !i_2 in
+        match%compare K.compare key_1 key_2 with
+        | Eq ->
+          let v1 = unsafe_get_leaf_value l1 !i_1 in
+          let v2 = unsafe_get_leaf_value l2 !i_2 in
+          begin match%optional.Uopt Merger.both_present user ~k:key_1 ~v1 ~v2 ~erase ~map with
+            | None -> ()
+            | Some v ->
+              out_keys := key_1 :: !out_keys;
+              out_values := v :: !out_values;
+              if phys_same v1 v then incr identical_1;
+              if phys_same v2 v then incr identical_2;
+              incr out_len
+          end;
+          incr i_1;
+          incr i_2;
+          ()
+        | Lt ->
+          let v1 = unsafe_get_leaf_value l1 !i_1 in
+          begin match%optional.Uopt Merger.present_1 user ~k:key_1 ~v:v1 ~erase ~map with
+            | None -> ()
+            | Some v ->
+              out_keys := key_1 :: !out_keys;
+              out_values := v :: !out_values;
+              if phys_same v1 v then incr identical_1;
+              incr out_len
+          end;
+          incr i_1;
+          ()
+        | Gt ->
+          let v2 = unsafe_get_leaf_value l2 !i_2 in
+          begin match%optional.Uopt Merger.present_2 user ~k:key_2 ~v:v2 ~erase ~map with
+            | None -> ()
+            | Some v ->
+              out_keys := key_2 :: !out_keys;
+              out_values := v :: !out_values;
+              if phys_same v2 v then incr identical_2;
+              incr out_len
+          end;
+          incr i_2;
+      done;
+      while !i_1 < len_1 do
+        let key_1 = unsafe_get_leaf_key l1 !i_1 in
+        let v1 = unsafe_get_leaf_value l1 !i_1 in
+        begin match%optional.Uopt Merger.present_1 user ~k:key_1 ~v:v1 ~erase ~map with
+          | None -> ()
+          | Some v ->
+            out_keys := key_1 :: !out_keys;
+            out_values := v :: !out_values;
+            if phys_same v1 v then incr identical_1;
+            incr out_len
+        end;
+        incr i_1;
+      done;
+      while !i_2 < len_2 do
+        let key_2 = unsafe_get_leaf_key l2 !i_2 in
+        let v2 = unsafe_get_leaf_value l2 !i_2 in
+        begin match%optional.Uopt Merger.present_2 user ~k:key_2 ~v:v2 ~erase ~map with
+          | None -> ()
+          | Some v ->
+            out_keys := key_2 :: !out_keys;
+            out_values := v :: !out_values;
+            if phys_same v2 v then incr identical_2;
+            incr out_len
+        end;
+        incr i_2;
+      done;
+      if !out_len = !identical_1
+      then Obj.magic (leaf_to_node l1)
+      else if !out_len = !identical_2
+      then Obj.magic (leaf_to_node l2)
+      else
+        of_short_rev_list !out_keys !out_values
+    (*
+    let merge_leaf user l1 l2 =
+      match l1 with
+      | L (V3 { k11; v11; k1; v1; k12; v12; }) ->
+        match Find_uopt.find_leaf with
+        | None -> assert false
+       *)
+
     let rec merge ~er ~srl ~srr user t1 t2 =
       match t1, t2 with
       | T (Empty _), T (Empty _) -> empty
@@ -2621,8 +2831,8 @@ module [@inline always] Stdlib_make(O : Map.OrderedType)
     | _ ->  None
 
   module Mem = M.Make_find(struct
-      type 'a user = unit
-      type 'a return = bool
+      type ('a, 'r) user = unit
+      type ('a, 'r) return = bool
       let found _ _ _ = true
       let missing _ _ = false
     end)
