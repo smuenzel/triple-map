@@ -2849,8 +2849,9 @@ module [@inline always] Stdlib_make(O : Map.OrderedType)
 
   module Equal = M.Fold_low2(Equal_folder)
 
+  exception Unequal
+
   let equal f t1 t2 = 
-    let exception Unequal in
     try
       Equal.fold
         ~init:Unequal
@@ -2884,8 +2885,9 @@ module [@inline always] Stdlib_make(O : Map.OrderedType)
 
   module Compare = M.Fold_low2(Compare_folder)
 
+  exception Compare of int
+
   let compare f t1 t2 =
-    let exception Compare of int in
     let e i = raise_notrace (Compare i) in
     try
       Compare.fold
@@ -2897,9 +2899,9 @@ module [@inline always] Stdlib_make(O : Map.OrderedType)
     with
     | Compare i -> i
 
+  exception Not_all
 
   let for_all f t =
-    let exception Not_all in
     try
       M.fold_low ~init:Not_all ~user:f
         ~f:(fun exn f k v -> if not (f k v) then raise_notrace exn; exn)
@@ -2908,8 +2910,9 @@ module [@inline always] Stdlib_make(O : Map.OrderedType)
     with
     | Not_all -> false
 
+  exception Exists
+
   let exists f t =
-    let exception Exists in
     try
       M.fold_low ~init:Exists ~user:f
         ~f:(fun exn f k v -> if f k v then raise_notrace exn; exn)

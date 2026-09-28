@@ -198,6 +198,24 @@ module Make (Make : Map_functor) = struct
     [ union_same
     ; union_interleave
     ]
+
+  let equal_true =
+    Bench.Test.create_parameterised
+      ~name:("equal")
+      ~args:Test_data.Int.Sorted.args
+      (fun ar ->
+         let ar = Lazy.force ar in
+         let map1 = Array.fold ~init:IntMap.empty ar ~f:(fun acc i -> IntMap.add i i acc) in
+         let i = ref 0 in
+         Staged.stage
+           (fun () ->
+              let (_ : bool) = Sys.opaque_identity (IntMap.equal map1 map2) in
+              incr i
+           )
+      )
+
+  let equal =
+    [ equal_true ]
 end
 
 module type Make = sig
@@ -206,6 +224,7 @@ module type Make = sig
   val del : Bench.Test.t list
   val split : Bench.Test.t list
   val union : Bench.Test.t list
+  val equal : Bench.Test.t list
 end
 
 module Stdlib_test = Make (Stdlib.Map.Make)
@@ -362,6 +381,7 @@ let add_command = generic_command (fun (module M : Make) -> M.add)
 let del_command = generic_command (fun (module M : Make) -> M.del)
 let split_command = generic_command (fun (module M : Make) -> M.split)
 let union_command = generic_command (fun (module M : Make) -> M.union)
+let equal_command = generic_command (fun (module M : Make) -> M.equal)
 
 let command =
   Command.group
@@ -373,6 +393,7 @@ let command =
     ; "del", del_command
     ; "split", split_command
     ; "union", union_command
+    ; "equal", equal_command
     ]
 
 let () =
