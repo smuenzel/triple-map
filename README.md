@@ -15,6 +15,15 @@ memory usage and intermediate allocations are consistently better.
 
 Cardinal is O(1), compared to Stdlib.Map's O(n).
 
+In general, modifying operations attempt to maintain the original map if the operation
+ends up being the identity (including in the case of `map` or `union`, where the resulting
+types may be different).
+
+Some unsafe operations are used to work around limitations in the what we can express to
+the OCaml compiler, but they are intended to be safe in practice (and real unsafety is
+considered a bug). Generally, the operations are wrapped in interfaces and should not be
+used directly from outside the library.
+
 ## Balancing Scheme
 
 We maintain the following balance: omega2 * n1 > 2 * n2, where n1,n2 are the weights of

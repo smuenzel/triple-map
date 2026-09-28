@@ -237,7 +237,7 @@ let responder_ratio kind a b =
       coe_b
   in
   Percent.of_mult
-    (estimate_b /. estimate_a)
+    (estimate_a /. estimate_b)
   |> Percent.to_string
 
 let span_string s =
@@ -318,7 +318,7 @@ let run ~stdlib ~triple =
         (fun (_,a) ->
            responder_string span_string `Nanos a
         )
-    ; mk_col "timing ratio"
+    ; mk_col "speedup"
         (fun (a,b) ->
            responder_ratio `Nanos a b
         )
@@ -330,7 +330,7 @@ let run ~stdlib ~triple =
         (fun (_,a) ->
            responder_string word_string `Minor_allocated a
         )
-    ; mk_col "minor words ratio"
+    ; mk_col "minor words improvement"
         (fun (a,b) ->
            responder_ratio `Minor_allocated a b
         )
