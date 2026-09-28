@@ -1,9 +1,9 @@
 
 # Triple Map
 
-Triple map is a weight-balanced map implementation for ocaml using fat leafs.
+Triple map is a weight-balanced map implementation for ocaml using fat leaves.
 
-Leafs contain up to 3 key-value pairs, while taking up only about as much space as one
+Leaves contain up to 3 key-value pairs, while taking up only about as much space as one
 node of Stdlib.Map, drastically improving space efficiency (and cache hit rate).
 
 The weight balancing scheme is proven in Rocq (balance property is maintained during
