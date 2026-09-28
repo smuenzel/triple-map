@@ -2458,13 +2458,6 @@ let [@inline always] balance_shallow_with_weights ~n1w ~n2w ~n1 ~k0 ~v0 ~n2 =
       then Obj.magic (leaf_to_node l2)
       else
         of_short_rev_list !out_keys !out_values
-    (*
-    let merge_leaf user l1 l2 =
-      match l1 with
-      | L (V3 { k11; v11; k1; v1; k12; v12; }) ->
-        match Find_uopt.find_leaf with
-        | None -> assert false
-       *)
 
     let rec merge ~er ~srl ~srr user t1 t2 =
       match t1, t2 with
