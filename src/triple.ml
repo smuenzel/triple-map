@@ -2884,7 +2884,7 @@ module [@inline always] Stdlib_make(O : Map.OrderedType)
       else e.f (1)
   end
 
-  module Compare = M.Fold_low2(Compare_folder)
+  module Compare = M.FolderX_2(Compare_folder)
 
   exception Compare of int
 
