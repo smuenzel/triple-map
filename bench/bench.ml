@@ -285,7 +285,8 @@ let responder_string to_string kind a =
 
 let run ~stdlib ~triple =
   let quota =
-    Bench.Quota.Num_calls 55
+    (* At least 55 are needed for core_bench to produce an analysis *)
+    Bench.Quota.Num_calls (8*55)
   in
   let bootstrap_trials = 1_000 in
   let analysis_timing =
