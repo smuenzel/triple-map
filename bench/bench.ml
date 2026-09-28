@@ -209,7 +209,7 @@ module Make (Make : Map_functor) = struct
          let i = ref 0 in
          Staged.stage
            (fun () ->
-              let (_ : bool) = Sys.opaque_identity (IntMap.equal map1 map2) in
+              let (_ : bool) = Sys.opaque_identity (IntMap.equal Int.equal map1 map1) in
               incr i
            )
       )

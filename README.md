@@ -32,4 +32,6 @@ the two children, and omega2 = 5.
 Weight is defined as the sum of the weights of the child nodes, with weight(empty) = 1.
 Thus, weight is one more than the number of elements.
 
+## Performance Engineering
 
+Flambda at -O3 is strictly required to achieve acceptable performance.
