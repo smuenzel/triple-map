@@ -2347,7 +2347,7 @@ let [@inline always] balance_shallow_with_weights ~n1w ~n2w ~n1 ~k0 ~v0 ~n2 =
       | [], [] -> empty
       | [k], [v] -> T (V1 { k1 = k; v1 = v })
       | [k1; k11], [v1; v11] -> T (V2 { k11 = k11; v11 = v11; k1 = k1; v1 = v1 })
-      | [k1; k11; k12], [v1; v11; v12] -> T (V3 { k11 = k11; v11 = v11; k1 = k1; v1 = v1; k12 = k12; v12 = v12 })
+      | [k12; k1; k11], [v12; v1; v11] -> T (V3 { k11 = k11; v11 = v11; k1 = k1; v1 = v1; k12 = k12; v12 = v12 })
       | [k3; k2; k1; k0], [v3; v2; v1; v0] ->
         T (Node { weight = 5
                 ; n1 = T (V2 { k11 = k0; v11 = v0; k1 = k1; v1 = v1 })
@@ -2450,9 +2450,9 @@ let [@inline always] balance_shallow_with_weights ~n1w ~n2w ~n1 ~k0 ~v0 ~n2 =
         end;
         incr i_2;
       done;
-      if !out_len = !identical_1
+      if !out_len = len_1 && !identical_1 = len_1
       then Obj.magic (leaf_to_node l1)
-      else if !out_len = !identical_2
+      else if !out_len = len_2 && !identical_2 = len_2
       then Obj.magic (leaf_to_node l2)
       else
         of_short_rev_list !out_keys !out_values
