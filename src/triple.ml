@@ -100,6 +100,7 @@ module [@inline always] Make(K : StandardOrdered) = struct
 
     val empty : 'v t
 
+    val unsafe_node_to_leaf : 'v t -> 'v leaf
     val leaf_to_node : 'v leaf -> 'v t
   end = struct
     type empty = unit
@@ -124,6 +125,7 @@ module [@inline always] Make(K : StandardOrdered) = struct
 
     let empty = T (Empty ())
 
+    let unsafe_node_to_leaf (T n) = (L (Obj.magic n))
     let leaf_to_node (L n) = T n
   end
   include T
@@ -2368,7 +2370,7 @@ let [@inline always] balance_shallow_with_weights ~n1w ~n2w ~n1 ~k0 ~v0 ~n2 =
                 })
       | _ -> assert false
 
-    let merge_leaf_non_empty (type a1 a2) user (l1 : a1 leaf) (l2 : a2 leaf) =
+    let merge_leaf (type a1 a2) user (l1 : a1 leaf) (l2 : a2 leaf) =
       let len_1 = weight_leaf l1 - 1 in
       let len_2 = weight_leaf l2 - 1 in
       let out_keys = ref [] in
@@ -2472,11 +2474,12 @@ let [@inline always] balance_shallow_with_weights ~n1w ~n2w ~n1 ~k0 ~v0 ~n2 =
       | _, T (Empty _) ->
         Merger.remainder_1 user ~return:er t1
       | _ ->
-        if weight t1 > weight t2
+        if weight t1 >= weight t2
         then begin
           match t1 with
-          | T (V1 { k1; v1 }) ->
-            merge_left ~er ~srl ~srr user ~l1:empty ~k:k1 ~v:v1 ~r1:empty ~t2
+          | T (V1 _ as l1) ->
+            (* t2 is smaller or equal, so must be a leaf *)
+            merge_leaf user (L l1) (unsafe_node_to_leaf t2)
           | T (V2 { k11; v11; k1; v1 }) ->
             merge_left ~er ~srl ~srr user ~l1:empty ~k:k11 ~v:v11 ~r1:(T (V1 { k1; v1 })) ~t2
           | T (V3 { k11; v11; k1; v1; k12; v12 }) ->
