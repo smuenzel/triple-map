@@ -12,3 +12,15 @@ building/rebalacing). Other operations are not yet proven.
 Performance is usually faster than Stdlib.Map for almost all operations.
 Sometimes triple map is slightly slower (on the order of a couple of percent), but
 memory usage and intermediate allocations are consistently better.
+
+Cardinal is O(1), compared to Stdlib.Map's O(n).
+
+## Balancing Scheme
+
+We maintain the following balance: omega2 * n1 > 2 * n2, where n1,n2 are the weights of
+the two children, and omega2 = 5.
+
+Weight is defined as the sum of the weights of the child nodes, with weight(empty) = 1.
+Thus, weight is one more than the number of elements.
+
+
