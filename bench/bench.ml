@@ -178,7 +178,7 @@ module Make (Make : Map_functor) = struct
   let union_gen what how =
     Bench.Test.create_parameterised
       ~name:("union(in-order)." ^ what)
-      ~args:(List.tl_exn (List.rev Test_data.Int.Sorted.args))
+      ~args:Test_data.Int.Sorted.args
       (fun ar ->
          let ar = Lazy.force ar in
          let map1 = Array.fold ~init:IntMap.empty ar ~f:(fun acc i -> IntMap.add i i acc) in
