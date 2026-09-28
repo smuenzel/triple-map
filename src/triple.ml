@@ -2480,25 +2480,21 @@ let [@inline always] balance_shallow_with_weights ~n1w ~n2w ~n1 ~k0 ~v0 ~n2 =
           | T (V1 _ as l1) ->
             (* t2 is smaller or equal, so must be a leaf *)
             merge_leaf user (L l1) (unsafe_node_to_leaf t2)
-          | T (V2 { k11; v11; k1; v1 }) ->
-            merge_left ~er ~srl ~srr user ~l1:empty ~k:k11 ~v:v11 ~r1:(T (V1 { k1; v1 })) ~t2
-          | T (V3 { k11; v11; k1; v1; k12; v12 }) ->
-            let l1 = T (V1 { k1 = k11; v1 = v11 }) in
-            let r1 = T (V1 { k1 = k12; v1 = v12 }) in
-            merge_left ~er ~srl ~srr user ~l1 ~k:k1 ~v:v1 ~r1 ~t2
+          | T (V2 _ as l1) ->
+            merge_leaf user (L l1) (unsafe_node_to_leaf t2)
+          | T (V3 _ as l1) ->
+            merge_leaf user (L l1) (unsafe_node_to_leaf t2)
           | T (Node { n1; k0; v0; n2 }) ->
             merge_left ~er ~srl ~srr user ~l1:n1 ~k:k0 ~v:v0 ~r1:n2 ~t2
           | _ -> assert false
         end else begin
           match t2 with
-          | T (V1 { k1; v1 }) ->
-            merge_right ~er ~srl ~srr user ~t1 ~l2:empty ~k:k1 ~v:v1 ~r2:empty
-          | T (V2 { k11; v11; k1; v1 }) ->
-            merge_right ~er ~srl ~srr user ~t1 ~l2:empty ~k:k11 ~v:v11 ~r2:(T (V1 { k1; v1 }))
-          | T (V3 { k11; v11; k1; v1; k12; v12 }) ->
-            let l2 = T (V1 { k1 = k11; v1 = v11 }) in
-            let r2 = T (V1 { k1 = k12; v1 = v12 }) in
-            merge_right ~er ~srl ~srr user ~t1 ~l2 ~k:k1 ~v:v1 ~r2
+          | T (V1 _ as l2) ->
+            merge_leaf user (unsafe_node_to_leaf t1) (L l2)
+          | T (V2 _ as l2) ->
+            merge_leaf user (unsafe_node_to_leaf t1) (L l2)
+          | T (V3 _ as l2) ->
+            merge_leaf user (unsafe_node_to_leaf t1) (L l2)
           | T (Node { n1; k0; v0; n2 }) ->
             merge_right ~er ~srl ~srr user ~t1 ~l2:n1 ~k:k0 ~v:v0 ~r2:n2
           | _ -> assert false
