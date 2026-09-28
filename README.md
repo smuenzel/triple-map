@@ -27,8 +27,13 @@ used directly from outside the library.
 
 ## Balancing Scheme
 
-We maintain the following balance: omega2 * n1 > 2 * n2, where n1,n2 are the weights of
-the two children, and omega2 = 5.
+We maintain the following balance: omega2 * n1 >= 2 * n2, where n1,n2 are the weights of
+the two children, and omega2 = 5, n1 is the smaller child, and n2 is the larger child.
+
+We can rebalance a tree that has a maximum 80% of the weight in one child using our
+standard scheme, resulting in a tree with a maximum 71% of the weight in one child
+in the worst case.
+Thus, the heights of the subtrees should not differ by more than about 1.3.
 
 Weight is defined as the sum of the weights of the child nodes, with weight(empty) = 1.
 Thus, weight is one more than the number of elements.
