@@ -918,102 +918,6 @@ let [@inline always] balance_shallow_with_weights ~n1w ~n2w ~n1 ~k0 ~v0 ~n2 =
         then Obj.magic t
         else join ~n1:n1' ~k0 ~v0:v0' ~n2:n2'
 
-  module type Merger = sig
-    type ('a1, 'a2, 'r) res
-    type ('a1, 'a2, 'r) user_param
-
-    val both_present : ('a1, 'a2, 'r) user_param -> k:K.t -> v1:'a1 -> v2:'a2 -> erase:'cout -> map:(('a1, 'a2, 'r) res -> 'cout) -> 'cout
-    val present_1 : ('a1, 'a2, 'r) user_param -> k:K.t -> v:'a1 -> erase:'cout -> map:(('a1, 'a2, 'r) res -> 'cout) -> 'cout
-    val present_2 : ('a1, 'a2, 'r) user_param -> k:K.t -> v:'a2 -> erase:'cout -> map:(('a1, 'a2, 'r) res -> 'cout) -> 'cout
-  end
-
-  module type Merger_base = sig
-    include Merger
-
-    val remainder_1 : ('a1, 'a2, 'r) user_param -> return:('a1, 'a2, 'r) res Extremum_return.t -> 'a1 t -> ('a1, 'a2, 'r) res t
-    val remainder_2 : ('a1, 'a2, 'r) user_param -> return:('a1, 'a2, 'r) res Extremum_return.t -> 'a2 t -> ('a1, 'a2, 'r) res t
-  end
-
-  module [@inline always] Merge_base(Merger : Merger_base) = struct
-
-    let erase = Uopt.none
-    let map = Uopt.some
-
-    let rec merge ~er ~srl ~srr user t1 t2 =
-      match t1, t2 with
-      | T (Empty _), T (Empty _) -> empty
-      | T (Empty _), _ -> 
-        Merger.remainder_2 user ~return:er t2
-      | _, T (Empty _) ->
-        Merger.remainder_1 user ~return:er t1
-      | _ ->
-        if weight t1 > weight t2
-        then begin
-          match t1 with
-          | T (V1 { k1; v1 }) ->
-            merge_left ~er ~srl ~srr user ~l1:empty ~k:k1 ~v:v1 ~r1:empty ~t2
-          | T (V2 { k11; v11; k1; v1 }) ->
-            merge_left ~er ~srl ~srr user ~l1:empty ~k:k11 ~v:v11 ~r1:(T (V1 { k1; v1 })) ~t2
-          | T (V3 { k11; v11; k1; v1; k12; v12 }) ->
-            let l1 = T (V1 { k1 = k11; v1 = v11 }) in
-            let r1 = T (V1 { k1 = k12; v1 = v12 }) in
-            merge_left ~er ~srl ~srr user ~l1 ~k:k1 ~v:v1 ~r1 ~t2
-          | T (Node { n1; k0; v0; n2 }) ->
-            merge_left ~er ~srl ~srr user ~l1:n1 ~k:k0 ~v:v0 ~r1:n2 ~t2
-          | _ -> assert false
-        end else begin
-          match t2 with
-          | T (V1 { k1; v1 }) ->
-            merge_right ~er ~srl ~srr user ~t1 ~l2:empty ~k:k1 ~v:v1 ~r2:empty
-          | T (V2 { k11; v11; k1; v1 }) ->
-            merge_right ~er ~srl ~srr user ~t1 ~l2:empty ~k:k11 ~v:v11 ~r2:(T (V1 { k1; v1 }))
-          | T (V3 { k11; v11; k1; v1; k12; v12 }) ->
-            let l2 = T (V1 { k1 = k11; v1 = v11 }) in
-            let r2 = T (V1 { k1 = k12; v1 = v12 }) in
-            merge_right ~er ~srl ~srr user ~t1 ~l2 ~k:k1 ~v:v1 ~r2
-          | T (Node { n1; k0; v0; n2 }) ->
-            merge_right ~er ~srl ~srr user ~t1 ~l2:n1 ~k:k0 ~v:v0 ~r2:n2
-          | _ -> assert false
-        end
-    and merge_left ~er ~srl ~srr user ~l1 ~k ~v ~r1 ~t2 =
-      let sv = split ~return:srl t2 k in
-      let l2 = Split_return.left srl in
-      let r2 = Split_return.right srl in
-      let l = merge ~er ~srl ~srr user l1 l2 in
-      let r = merge ~er ~srl ~srr user r1 r2 in
-      match%optional.Uopt
-        match%optional.Uopt sv with
-        | None -> Merger.present_1 user ~k ~v ~erase ~map
-        | Some v2 -> Merger.both_present user ~k ~v1:v ~v2 ~erase ~map
-      with
-      | None -> concat_unchecked ~return:er l r
-      | Some v -> join ~n1:l ~k0:k ~v0:v ~n2:r
-    and merge_right ~er ~srl ~srr user ~t1 ~l2 ~k ~v ~r2 =
-      let sv = split ~return:srr t1 k in
-      let l1 = Split_return.left srr in
-      let r1 = Split_return.right srr in
-      let l = merge ~er ~srl ~srr user l1 l2 in
-      let r = merge ~er ~srl ~srr user r1 r2 in
-      match%optional.Uopt
-        match%optional.Uopt sv with
-        | None -> Merger.present_2 user ~k ~v ~erase ~map
-        | Some v1 -> Merger.both_present user ~k ~v1 ~v2:v ~erase ~map
-      with
-      | None -> concat_unchecked ~return:er l r
-      | Some v -> join ~n1:l ~k0:k ~v0:v ~n2:r
-  end
-
-  module [@inline always] Merge(Merger : Merger) =
-    Merge_base(struct
-      include Merger
-
-      let remainder_1 user ~return t1 =
-        filter_map ~return ~f:Merger.present_1 user t1
-
-      let remainder_2 user ~return t2 =
-        filter_map ~return ~f:Merger.present_2 user t2
-    end)
-
   module Change = struct
     let [@inline hint] unchanged t = T t
 
@@ -2328,6 +2232,103 @@ let [@inline always] balance_shallow_with_weights ~n1w ~n2w ~n1 ~k0 ~v0 ~n2 =
       step1 ~acc ~user ~stack1:Stack.empty ~t1 ~state1:Start ~stack2:Stack.empty ~t2 ~state2:Start
 
   end
+
+  module type Merger = sig
+    type ('a1, 'a2, 'r) res
+    type ('a1, 'a2, 'r) user_param
+
+    val both_present : ('a1, 'a2, 'r) user_param -> k:K.t -> v1:'a1 -> v2:'a2 -> erase:'cout -> map:(('a1, 'a2, 'r) res -> 'cout) -> 'cout
+    val present_1 : ('a1, 'a2, 'r) user_param -> k:K.t -> v:'a1 -> erase:'cout -> map:(('a1, 'a2, 'r) res -> 'cout) -> 'cout
+    val present_2 : ('a1, 'a2, 'r) user_param -> k:K.t -> v:'a2 -> erase:'cout -> map:(('a1, 'a2, 'r) res -> 'cout) -> 'cout
+  end
+
+  module type Merger_base = sig
+    include Merger
+
+    val remainder_1 : ('a1, 'a2, 'r) user_param -> return:('a1, 'a2, 'r) res Extremum_return.t -> 'a1 t -> ('a1, 'a2, 'r) res t
+    val remainder_2 : ('a1, 'a2, 'r) user_param -> return:('a1, 'a2, 'r) res Extremum_return.t -> 'a2 t -> ('a1, 'a2, 'r) res t
+  end
+
+  module [@inline always] Merge_base(Merger : Merger_base) = struct
+
+    let erase = Uopt.none
+    let map = Uopt.some
+
+    let rec merge ~er ~srl ~srr user t1 t2 =
+      match t1, t2 with
+      | T (Empty _), T (Empty _) -> empty
+      | T (Empty _), _ -> 
+        Merger.remainder_2 user ~return:er t2
+      | _, T (Empty _) ->
+        Merger.remainder_1 user ~return:er t1
+      | _ ->
+        if weight t1 > weight t2
+        then begin
+          match t1 with
+          | T (V1 { k1; v1 }) ->
+            merge_left ~er ~srl ~srr user ~l1:empty ~k:k1 ~v:v1 ~r1:empty ~t2
+          | T (V2 { k11; v11; k1; v1 }) ->
+            merge_left ~er ~srl ~srr user ~l1:empty ~k:k11 ~v:v11 ~r1:(T (V1 { k1; v1 })) ~t2
+          | T (V3 { k11; v11; k1; v1; k12; v12 }) ->
+            let l1 = T (V1 { k1 = k11; v1 = v11 }) in
+            let r1 = T (V1 { k1 = k12; v1 = v12 }) in
+            merge_left ~er ~srl ~srr user ~l1 ~k:k1 ~v:v1 ~r1 ~t2
+          | T (Node { n1; k0; v0; n2 }) ->
+            merge_left ~er ~srl ~srr user ~l1:n1 ~k:k0 ~v:v0 ~r1:n2 ~t2
+          | _ -> assert false
+        end else begin
+          match t2 with
+          | T (V1 { k1; v1 }) ->
+            merge_right ~er ~srl ~srr user ~t1 ~l2:empty ~k:k1 ~v:v1 ~r2:empty
+          | T (V2 { k11; v11; k1; v1 }) ->
+            merge_right ~er ~srl ~srr user ~t1 ~l2:empty ~k:k11 ~v:v11 ~r2:(T (V1 { k1; v1 }))
+          | T (V3 { k11; v11; k1; v1; k12; v12 }) ->
+            let l2 = T (V1 { k1 = k11; v1 = v11 }) in
+            let r2 = T (V1 { k1 = k12; v1 = v12 }) in
+            merge_right ~er ~srl ~srr user ~t1 ~l2 ~k:k1 ~v:v1 ~r2
+          | T (Node { n1; k0; v0; n2 }) ->
+            merge_right ~er ~srl ~srr user ~t1 ~l2:n1 ~k:k0 ~v:v0 ~r2:n2
+          | _ -> assert false
+        end
+    and merge_left ~er ~srl ~srr user ~l1 ~k ~v ~r1 ~t2 =
+      let sv = split ~return:srl t2 k in
+      let l2 = Split_return.left srl in
+      let r2 = Split_return.right srl in
+      let l = merge ~er ~srl ~srr user l1 l2 in
+      let r = merge ~er ~srl ~srr user r1 r2 in
+      match%optional.Uopt
+        match%optional.Uopt sv with
+        | None -> Merger.present_1 user ~k ~v ~erase ~map
+        | Some v2 -> Merger.both_present user ~k ~v1:v ~v2 ~erase ~map
+      with
+      | None -> concat_unchecked ~return:er l r
+      | Some v -> join ~n1:l ~k0:k ~v0:v ~n2:r
+    and merge_right ~er ~srl ~srr user ~t1 ~l2 ~k ~v ~r2 =
+      let sv = split ~return:srr t1 k in
+      let l1 = Split_return.left srr in
+      let r1 = Split_return.right srr in
+      let l = merge ~er ~srl ~srr user l1 l2 in
+      let r = merge ~er ~srl ~srr user r1 r2 in
+      match%optional.Uopt
+        match%optional.Uopt sv with
+        | None -> Merger.present_2 user ~k ~v ~erase ~map
+        | Some v1 -> Merger.both_present user ~k ~v1 ~v2:v ~erase ~map
+      with
+      | None -> concat_unchecked ~return:er l r
+      | Some v -> join ~n1:l ~k0:k ~v0:v ~n2:r
+  end
+
+  module [@inline always] Merge(Merger : Merger) =
+    Merge_base(struct
+      include Merger
+
+      let remainder_1 user ~return t1 =
+        filter_map ~return ~f:Merger.present_1 user t1
+
+      let remainder_2 user ~return t2 =
+        filter_map ~return ~f:Merger.present_2 user t2
+    end)
+
 
 end
 
