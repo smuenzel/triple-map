@@ -92,147 +92,147 @@ Definition change_unchanged {V : Type} (T : Tree V) := T.
 
 Definition change_delete_V1 {V : Type} (T : Tree V) : Tree V := Empty.
 
-Program Definition change_insert_Empty {V : Type} {T' : Tree V} {is : is_Empty T'} (T : {t : Tree V | t = T'}) (k : K.t) (v : V) :=
+Program Definition change_insert_Empty {V : Type} {T' : Tree V} {ise : is_Empty T'} (T : {t : Tree V | t = T'}) (k : K.t) (v : V) :=
   match T with
   | Empty => V1 k v
   | V1 _ _ | V2 _ _ _ _ | V3 _ _ _ _ _ _ | Node _ _ _ _ _ => False_rect (Tree V) _
   end.
 Solve All Obligations with intros; subst filtered_var; unfold is_Empty in *; destruct T; subst; intuition; inversion Heq_T.
 
-Program Definition change_replace_V1 {V : Type} {T' : Tree V} {is : is_V1 T'} (T : {t : Tree V | t = T'}) (v : V) :=
+Program Definition change_replace_V1 {V : Type} {T' : Tree V} {ise : is_V1 T'} (T : {t : Tree V | t = T'}) (v : V) :=
   match T with
   | (V1 k1 v1) => V1 k1 v
   | Empty | V2 _ _ _ _ | V3 _ _ _ _ _ _ | Node _ _ _ _ _ => False_rect (Tree V) _
   end.
 Solve All Obligations with intros; subst filtered_var; unfold is_V1 in *; destruct T, x; subst; intuition; inversion Heq_T.
 
-Program Definition change_insert_V1_less {V : Type} {T' : Tree V} {is : is_V1 T'} (T : {t : Tree V | t = T'}) (k : K.t) (v : V) :=
+Program Definition change_insert_V1_less {V : Type} {T' : Tree V} {ise : is_V1 T'} (T : {t : Tree V | t = T'}) (k : K.t) (v : V) :=
   match T with
   | (V1 k1 v1) => V2 k v k1 v1
   | Empty | V2 _ _ _ _ | V3 _ _ _ _ _ _ | Node _ _ _ _ _ => False_rect (Tree V) _
   end.
 Solve All Obligations with intros; subst filtered_var; unfold is_V1 in *; destruct T, x; subst; intuition; inversion Heq_T.
 
-Program Definition change_insert_V1_greater {V : Type} {T' : Tree V} {is : is_V1 T'} (T : {t : Tree V | t = T'}) (k : K.t) (v : V) :=
+Program Definition change_insert_V1_greater {V : Type} {T' : Tree V} {ise : is_V1 T'} (T : {t : Tree V | t = T'}) (k : K.t) (v : V) :=
   match T with
   | (V1 k1 v1) => V2 k1 v1 k v
   | Empty | V2 _ _ _ _ | V3 _ _ _ _ _ _ | Node _ _ _ _ _ => False_rect (Tree V) _
   end.
 Solve All Obligations with intros; subst filtered_var; unfold is_V1 in *; destruct T, x; subst; intuition; inversion Heq_T.
 
-Program Definition change_delete_V2_top {V : Type} {T' : Tree V} {is : is_V2 T'} (T : {t : Tree V | t = T'}) :=
+Program Definition change_delete_V2_top {V : Type} {T' : Tree V} {ise : is_V2 T'} (T : {t : Tree V | t = T'}) :=
   match T with
   | (V2 k11 v11 k1 v1) => V1 k11 v11
   | Empty | V1 _ _ | V3 _ _ _ _ _ _ | Node _ _ _ _ _ => False_rect (Tree V) _
   end.
 Solve All Obligations with intros; subst filtered_var; unfold is_V2 in *; destruct T, x; subst; intuition; inversion Heq_T.
 
-Program Definition change_delete_V2_bottom {V : Type} {T' : Tree V} {is : is_V2 T'} (T : {t : Tree V | t = T'}) :=
+Program Definition change_delete_V2_bottom {V : Type} {T' : Tree V} {ise : is_V2 T'} (T : {t : Tree V | t = T'}) :=
   match T with
   | (V2 k11 v11 k1 v1) => V1 k1 v1
   | Empty | V1 _ _ | V3 _ _ _ _ _ _ | Node _ _ _ _ _ => False_rect (Tree V) _
   end.
 Solve All Obligations with intros; subst filtered_var; unfold is_V2 in *; destruct T, x; subst; intuition; inversion Heq_T.
 
-Program Definition change_replace_V2_top {V : Type} {T' : Tree V} {is : is_V2 T'} (T : {t : Tree V | t = T'}) (v : V) :=
+Program Definition change_replace_V2_top {V : Type} {T' : Tree V} {ise : is_V2 T'} (T : {t : Tree V | t = T'}) (v : V) :=
   match T with
   | (V2 k11 v11 k1 v1) => V2 k11 v11 k1 v
   | Empty | V1 _ _ | V3 _ _ _ _ _ _ | Node _ _ _ _ _ => False_rect (Tree V) _
   end.
 Solve All Obligations with intros; subst filtered_var; unfold is_V2 in *; destruct T, x; subst; intuition; inversion Heq_T.
 
-Program Definition change_replace_V2_bottom {V : Type} {T' : Tree V} {is : is_V2 T'} (T : {t : Tree V | t = T'}) (v : V) :=
+Program Definition change_replace_V2_bottom {V : Type} {T' : Tree V} {ise : is_V2 T'} (T : {t : Tree V | t = T'}) (v : V) :=
   match T with
   | (V2 k11 v11 k1 v1) => V2 k11 v k1 v1
   | Empty | V1 _ _ | V3 _ _ _ _ _ _ | Node _ _ _ _ _ => False_rect (Tree V) _
   end.
 Solve All Obligations with intros; subst filtered_var; unfold is_V2 in *; destruct T, x; subst; intuition; inversion Heq_T.
 
-Program Definition change_insert_V2_bottom {V : Type} {T' : Tree V} {is : is_V2 T'} (T : {t : Tree V | t = T'}) (k : K.t) (v : V) :=
+Program Definition change_insert_V2_bottom {V : Type} {T' : Tree V} {ise : is_V2 T'} (T : {t : Tree V | t = T'}) (k : K.t) (v : V) :=
   match T with
   | (V2 k11 v11 k1 v1) => V3 k v k11 v11 k1 v1
   | Empty | V1 _ _ | V3 _ _ _ _ _ _ | Node _ _ _ _ _ => False_rect (Tree V) _
   end.
 Solve All Obligations with intros; subst filtered_var; unfold is_V2 in *; destruct T, x; subst; intuition; inversion Heq_T.
 
-Program Definition change_insert_V2_middle {V : Type} {T' : Tree V} {is : is_V2 T'} (T : {t : Tree V | t = T'}) (k : K.t) (v : V) :=
+Program Definition change_insert_V2_middle {V : Type} {T' : Tree V} {ise : is_V2 T'} (T : {t : Tree V | t = T'}) (k : K.t) (v : V) :=
   match T with
   | (V2 k11 v11 k1 v1) => V3 k11 v11 k v k1 v1
   | Empty | V1 _ _ | V3 _ _ _ _ _ _ | Node _ _ _ _ _ => False_rect (Tree V) _
   end.
 Solve All Obligations with intros; subst filtered_var; unfold is_V2 in *; destruct T, x; subst; intuition; inversion Heq_T.
 
-Program Definition change_insert_V2_top {V : Type} {T' : Tree V} {is : is_V2 T'} (T : {t : Tree V | t = T'}) (k : K.t) (v : V) :=
+Program Definition change_insert_V2_top {V : Type} {T' : Tree V} {ise : is_V2 T'} (T : {t : Tree V | t = T'}) (k : K.t) (v : V) :=
   match T with
   | (V2 k11 v11 k1 v1) => V3 k11 v11 k1 v1 k v
   | Empty | V1 _ _ | V3 _ _ _ _ _ _ | Node _ _ _ _ _ => False_rect (Tree V) _
   end.
 Solve All Obligations with intros; subst filtered_var; unfold is_V2 in *; destruct T, x; subst; intuition; inversion Heq_T.
 
-Program Definition change_delete_V3_top {V : Type} {T' : Tree V} {is : is_V3 T'} (T : {t : Tree V | t = T'}) :=
+Program Definition change_delete_V3_top {V : Type} {T' : Tree V} {ise : is_V3 T'} (T : {t : Tree V | t = T'}) :=
   match T with
   | (V3 k11 v11 k1 v1 k12 v12) => V2 k11 v11 k12 v12
   | Empty | V1 _ _ | V2 _ _ _ _ | Node _ _ _ _ _ => False_rect (Tree V) _
   end.
 Solve All Obligations with intros; subst filtered_var; unfold is_V3 in *; destruct T, x; subst; intuition; inversion Heq_T.
 
-Program Definition change_delete_V3_left {V : Type} {T' : Tree V} {is : is_V3 T'} (T : {t : Tree V | t = T'}) :=
+Program Definition change_delete_V3_left {V : Type} {T' : Tree V} {ise : is_V3 T'} (T : {t : Tree V | t = T'}) :=
   match T with
   | (V3 k11 v11 k1 v1 k12 v12) => V2 k1 v1 k12 v12
   | Empty | V1 _ _ | V2 _ _ _ _ | Node _ _ _ _ _ => False_rect (Tree V) _
   end.
 Solve All Obligations with intros; subst filtered_var; unfold is_V3 in *; destruct T, x; subst; intuition; inversion Heq_T.
 
-Program Definition change_delete_V3_right {V : Type} {T' : Tree V} {is : is_V3 T'} (T : {t : Tree V | t = T'}) :=
+Program Definition change_delete_V3_right {V : Type} {T' : Tree V} {ise : is_V3 T'} (T : {t : Tree V | t = T'}) :=
   match T with
   | (V3 k11 v11 k1 v1 k12 v12) => V2 k11 v11 k1 v1
   | Empty | V1 _ _ | V2 _ _ _ _ | Node _ _ _ _ _ => False_rect (Tree V) _
   end.
 Solve All Obligations with intros; subst filtered_var; unfold is_V3 in *; destruct T, x; subst; intuition; inversion Heq_T.
 
-Program Definition change_replace_V3_top {V : Type} {T' : Tree V} {is : is_V3 T'} (T : {t : Tree V | t = T'}) (v : V) :=
+Program Definition change_replace_V3_top {V : Type} {T' : Tree V} {ise : is_V3 T'} (T : {t : Tree V | t = T'}) (v : V) :=
   match T with
   | (V3 k11 v11 k1 v1 k12 v12) => V3 k11 v11 k1 v k12 v12
   | Empty | V1 _ _ | V2 _ _ _ _ | Node _ _ _ _ _ => False_rect (Tree V) _
   end.
 Solve All Obligations with intros; subst filtered_var; unfold is_V3 in *; destruct T, x; subst; intuition; inversion Heq_T.
 
-Program Definition change_replace_V3_left {V : Type} {T' : Tree V} {is : is_V3 T'} (T : {t : Tree V | t = T'}) (v : V) :=
+Program Definition change_replace_V3_left {V : Type} {T' : Tree V} {ise : is_V3 T'} (T : {t : Tree V | t = T'}) (v : V) :=
   match T with
   | (V3 k11 v11 k1 v1 k12 v12) => V3 k11 v k1 v1 k12 v12
   | Empty | V1 _ _ | V2 _ _ _ _ | Node _ _ _ _ _ => False_rect (Tree V) _
   end.
 Solve All Obligations with intros; subst filtered_var; unfold is_V3 in *; destruct T, x; subst; intuition; inversion Heq_T.
 
-Program Definition change_replace_V3_right {V : Type} {T' : Tree V} {is : is_V3 T'} (T : {t : Tree V | t = T'}) (v : V) :=
+Program Definition change_replace_V3_right {V : Type} {T' : Tree V} {ise : is_V3 T'} (T : {t : Tree V | t = T'}) (v : V) :=
   match T with
   | (V3 k11 v11 k1 v1 k12 v12) => V3 k11 v11 k1 v1 k12 v
   | Empty | V1 _ _ | V2 _ _ _ _ | Node _ _ _ _ _ => False_rect (Tree V) _
   end.
 Solve All Obligations with intros; subst filtered_var; unfold is_V3 in *; destruct T, x; subst; intuition; inversion Heq_T.
 
-Program Definition change_insert_V3_below_11 {V : Type} {T' : Tree V} {is : is_V3 T'} (T : {t : Tree V | t = T'}) (k : K.t) (v : V) :=
+Program Definition change_insert_V3_below_11 {V : Type} {T' : Tree V} {ise : is_V3 T'} (T : {t : Tree V | t = T'}) (k : K.t) (v : V) :=
   match T with
   | (V3 k11 v11 k1 v1 k12 v12) => Node 5 (V2 k v k11 v11) k1 v1 (V1 k12 v12)
   | Empty | V1 _ _ | V2 _ _ _ _ | Node _ _ _ _ _ => False_rect (Tree V) _
   end.
 Solve All Obligations with intros; subst filtered_var; unfold is_V3 in *; destruct T, x; subst; intuition; inversion Heq_T.
 
-Program Definition change_insert_V3_between_11_1 {V : Type} {T' : Tree V} {is : is_V3 T'} (T : {t : Tree V | t = T'}) (k : K.t) (v : V) :=
+Program Definition change_insert_V3_between_11_1 {V : Type} {T' : Tree V} {ise : is_V3 T'} (T : {t : Tree V | t = T'}) (k : K.t) (v : V) :=
   match T with
   | (V3 k11 v11 k1 v1 k12 v12) => Node 5 (V2 k11 v11 k v) k1 v1 (V1 k12 v12)
   | Empty | V1 _ _ | V2 _ _ _ _ | Node _ _ _ _ _ => False_rect (Tree V) _
   end.
 Solve All Obligations with intros; subst filtered_var; unfold is_V3 in *; destruct T, x; subst; intuition; inversion Heq_T.
 
-Program Definition change_insert_V3_between_1_12 {V : Type} {T' : Tree V} {is : is_V3 T'} (T : {t : Tree V | t = T'}) (k : K.t) (v : V) :=
+Program Definition change_insert_V3_between_1_12 {V : Type} {T' : Tree V} {ise : is_V3 T'} (T : {t : Tree V | t = T'}) (k : K.t) (v : V) :=
   match T with
   | (V3 k11 v11 k1 v1 k12 v12) => Node 5 (V2 k11 v11 k1 v1) k v (V1 k12 v12)
   | Empty | V1 _ _ | V2 _ _ _ _ | Node _ _ _ _ _ => False_rect (Tree V) _
   end.
 Solve All Obligations with intros; subst filtered_var; unfold is_V3 in *; destruct T, x; subst; intuition; inversion Heq_T.
 
-Program Definition change_insert_V3_above_12 {V : Type} {T' : Tree V} {is : is_V3 T'} (T : {t : Tree V | t = T'}) (k : K.t) (v : V) :=
+Program Definition change_insert_V3_above_12 {V : Type} {T' : Tree V} {ise : is_V3 T'} (T : {t : Tree V | t = T'}) (k : K.t) (v : V) :=
   match T with
   | (V3 k11 v11 k1 v1 k12 v12) => Node 5 (V2 k11 v11 k1 v1) k12 v12 (V1 k v)
   | Empty | V1 _ _ | V2 _ _ _ _ | Node _ _ _ _ _ => False_rect (Tree V) _
@@ -257,7 +257,7 @@ Program Fixpoint remove_min {V : Type} {A : Type} (T : Tree V) {ne : notEmpty T}
 Equations split_right {V : Type} (T1 : Tree V) (T2 : Tree V) (wbo1 : Property WellBalancedOrdered T1) (wbo2 : Property WellBalancedOrdered T2) :=
    split_right 
 
-Program Definition change_delete_node_top {V : Type} {T' : Tree V} {is : is_Node T'} {wbo : Property WellBalancedOrdered T'} (T : {t : Tree V | t = T'}) :=
+Program Definition change_delete_node_top {V : Type} {T' : Tree V} {ise : is_Node T'} {wbo : Property WellBalancedOrdered T'} (T : {t : Tree V | t = T'}) :=
   match T with
   | (Node w0 n1 k v n2) =>
       let w1 := weight n1 in
