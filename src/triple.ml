@@ -1825,8 +1825,8 @@ let [@inline always] balance_shallow_with_weights ~n1w ~n2w ~n1 ~k0 ~v0 ~n2 =
 
   module [@inline always] FolderX_2(F : Fold2_folder) : sig
     val fold
-      :  acc : ('v1, 'v2) F.acc
-      -> user:('v1, 'v2) F.user_param
+      :  init : ('v1, 'v2) F.acc
+      -> user_param:('v1, 'v2) F.user_param
       -> 'v1 t
       -> 'v2 t
       -> ('v1, 'v2) F.acc
@@ -2315,6 +2315,7 @@ let [@inline always] balance_shallow_with_weights ~n1w ~n2w ~n1 ~k0 ~v0 ~n2 =
       in
       step1 ~acc ~user ~stack1:Stack.empty ~t1 ~state1:Start ~stack2:Stack.empty ~t2 ~state2:Start
 
+    let fold ~init ~user_param:user t1 t2 = fold ~acc:init ~user t1 t2
   end
 
   module type Merger = sig
@@ -2847,7 +2848,7 @@ module [@inline always] Stdlib_make(O : Map.OrderedType)
       raise_notrace e
   end
 
-  module Equal = M.Fold_low2(Equal_folder)
+  module Equal = M.FolderX_2(Equal_folder)
 
   exception Unequal
 
