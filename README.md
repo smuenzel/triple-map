@@ -11,7 +11,8 @@ building/rebalacing). Other operations are not yet proven.
 
 Performance is usually faster than Stdlib.Map for almost all operations.
 Sometimes triple map is slightly slower (on the order of a couple of percent), but
-memory usage and intermediate allocations are consistently better.
+memory usage and intermediate allocations are consistently better (sometimes by a very
+large factor, such as 6x for the `equal` operation or 1.6x to 1.8x for `union`).
 
 Cardinal is O(1), compared to Stdlib.Map's O(n).
 
