@@ -1,5 +1,7 @@
 open Sexplib0.Sexp_conv
 
+module Intf = Triple_intf
+
 (* References:
 
    We don't use the Grandchild Scheme, but [1] is very helpful.
@@ -1150,14 +1152,9 @@ let [@inline always] balance_shallow_with_weights ~n1w ~n2w ~n1 ~k0 ~v0 ~n2 =
 
   end
 
-  module type Change_param = sig
-    type 'a t_p
-    type 'a user
-    val existing : 'cin -> delete_fun:('cin -> 'cout) -> replace_fun:('cin -> 'a t_p -> 'cout) -> unchanged_fun : ('cin -> 'cout) -> K.t -> 'a t_p -> 'a user -> 'cout
-    val missing : 'cin1 -> 'cin2 -> insert_fun:('cin1 -> 'cin2 -> 'a t_p -> 'cout) -> unchanged_fun : ('cin1 -> 'cout) -> K.t -> 'a user -> 'cout
-  end
+  module [@inline always] Make_change(C : Intf.Param.Change with module K := K) = struct
+    module C = C
 
-  module [@inline always] Make_change(C : Change_param) = struct
     let rec change
         (T t : 'a C.t_p t) k (user_param : 'a C.user)
       : 'a C.t_p t
@@ -1256,14 +1253,10 @@ let [@inline always] balance_shallow_with_weights ~n1w ~n2w ~n1 ~k0 ~v0 ~n2 =
 
   let insert_or_replace t k v = Insert_or_replace.change t k v
 
-  module type Find = sig
-    type ('a, 'r) user
-    type ('a, 'r) return
-    val found : K.t -> 'a -> ('a, 'r) user -> ('a, 'r) return
-    val missing : K.t -> ('a, 'r) user -> ('a, 'r) return
-  end
 
-  module[@inline always] Make_find(F : Find) = struct
+  module[@inline always] Make_find(F : Intf.Param.Find with module K := K) = struct
+    module C = F
+
     let rec find (T t) k user_param =
       match t with
       | Node { weight; n1; k0; v0; n2 } ->
@@ -1376,14 +1369,8 @@ let [@inline always] balance_shallow_with_weights ~n1w ~n2w ~n1 ~k0 ~v0 ~n2 =
           | _ -> invalid_arg "triple.t_of_sexp"
         ) empty list
 
-  module type Find_extremum = sig
-    type 'a user
-    type 'a return
-    val found : K.t -> 'a -> 'a user -> 'a return
-    val missing : 'a user -> 'a return
-  end
 
-  module [@inline always] Find_min(F : Find_extremum) = struct
+  module [@inline always] Find_min(F : Intf.Param.Find_extremum with module K := K) = struct
     let rec find (T t) user_param =
       match t with
       | Empty _ -> F.missing user_param
@@ -1393,7 +1380,7 @@ let [@inline always] balance_shallow_with_weights ~n1w ~n2w ~n1 ~k0 ~v0 ~n2 =
       | Node { weight; n1; k0; v0; n2 } -> find n1 user_param
   end
 
-  module [@inline always] Find_max(F : Find_extremum) = struct
+  module [@inline always] Find_max(F : Intf.Param.Find_extremum with module K := K) = struct
     let rec find (T t) user_param =
       match t with
       | Empty _ -> F.missing user_param
@@ -1403,7 +1390,7 @@ let [@inline always] balance_shallow_with_weights ~n1w ~n2w ~n1 ~k0 ~v0 ~n2 =
       | Node { weight; n1; k0; v0; n2 } -> find n2 user_param
   end
 
-  module [@inline always] Find_first(F : Find_extremum) = struct
+  module [@inline always] Find_first(F : Intf.Param.Find_extremum with module K := K) = struct
     let rec find (T t) ~f user_param =
       match t with
       | Empty _ -> F.missing user_param
@@ -1456,7 +1443,7 @@ let [@inline always] balance_shallow_with_weights ~n1w ~n2w ~n1 ~k0 ~v0 ~n2 =
         else find_more_extreme n2 ~f ~k ~v user_param
   end
 
-  module Find_last(F : Find_extremum) = struct
+  module Find_last(F : Intf.Param.Find_extremum with module K := K) = struct
     let rec find (T t) ~f user_param =
       match t with
       | Empty _ -> F.missing user_param
@@ -1823,7 +1810,7 @@ let [@inline always] balance_shallow_with_weights ~n1w ~n2w ~n1 ~k0 ~v0 ~n2 =
           ~final:final_consume_only_t2
   end
 
-  module [@inline always] FolderX_2(F : Fold2_folder) : sig
+  module [@inline always] Make_fold2(F : Intf.Param.Fold2 with module K := K) : sig
     val fold
       :  init : ('v1, 'v2) F.acc
       -> user_param:('v1, 'v2) F.user_param
@@ -2848,7 +2835,7 @@ module [@inline always] Stdlib_make(O : Map.OrderedType)
       raise_notrace e
   end
 
-  module Equal = M.FolderX_2(Equal_folder)
+  module Equal = M.Make_fold2(Equal_folder)
 
   exception Unequal
 
@@ -2884,7 +2871,7 @@ module [@inline always] Stdlib_make(O : Map.OrderedType)
       else e.f (1)
   end
 
-  module Compare = M.FolderX_2(Compare_folder)
+  module Compare = M.Make_fold2(Compare_folder)
 
   exception Compare of int
 
